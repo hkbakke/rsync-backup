@@ -1,0 +1,79 @@
+[general]
+
+# The name of the backup.
+backuplabel = example
+
+# The folder on this computer to backup to. This also includes logs and 
+# checksumfiles.
+backuproot = /srv/backups/$(backuplabel)
+
+# Set the number of days between automatic backup verifications based on the 
+# calculated checksums. Only the last backup will be verified automatically,
+# but as files are mostly hardlinked this should be sufficient in most cases.
+# Set to 0 to disable (not recommended).
+days_between_verifications = 7
+
+# The directory to store logs in
+log_dir = /srv/backups/$(backuplabel)/logs
+
+
+[rsync]
+
+# Use this to specify the path to the rsync executable.
+# The default is to use rsync from PATH.
+#pathname = rsync
+
+# rsync_mode tells the script how to reach the sourcefiles for the backup
+# ssh: ssh will by used as the transport for rsync.
+# local: use this when you are going to backup a local directory
+mode = ssh
+
+# The directory you want to backup. Note that paths in the rules file are 
+# relative to this directory.
+source_dir = /
+
+# Set some additional rsync options here if needed
+additional_options = --numeric-ids --partial-dir=.rsync-partial --timeout=600
+
+# IP/name of the computer to backup. Ignored if rsync_mode is local
+source_host = $(general:backuplabel)
+
+# These parameters are only used if rsync_mode is ssh.
+# ssh_user specifies the user you want to run the backup as on the
+# remote side. ssh_key specifies the local path to the key used for
+# authentication against the remote side.
+ssh_user = root
+ssh_key = /root/.ssh/backup
+
+
+[reporting]
+
+# Comma separated list of email addresses to send end status reports to.
+# A correctly set up MTA is needed.
+to_addrs = admin@example.com
+
+# A valid e-mail address to use as from address
+from_addr = backup@example.com
+
+# Specify if link to logs should be added to e-mail reports
+link_to_logs = false
+
+# The following parameter is only used if link_to_logs is true.
+# log_baseurl specifies the base URL to use for reaching the logfiles.
+logs_baseurl = https://backup.example.com/rsync-backup/$(general:backuplabel)/logs/
+
+# Send summary reports using this interval. If a backup job fail a
+# notification mail will get sent regardless of this setting.
+days_between_reports = 3
+
+
+[retention]
+
+# Set value to 0 to disable a retention category
+
+#daily = 30
+#monthly = 36
+#yearly = 5
+
+# How many days to keep log files
+#logs = 365
