@@ -52,8 +52,8 @@ Place a configuration file and a rsync rules-file in the conf.d directory for
 each backup job. Please see the example configuration file for additional
 explanations.
 
-* The configuration file must be called: <config>.conf
-* The rsync rules file must be called: <config>.rules
+* The configuration file must be called: `<config>.conf`
+* The rsync rules file must be called: `<config>.rules`
 
 ### Manual run
 Standard backup:
