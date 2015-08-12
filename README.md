@@ -37,24 +37,24 @@ The reporting currently assumes that localhost is correctly configured for
 SMTP and that it handles the forwarding to the correct SMTP-server for external
 communication.
 
-# Requirements
+## Requirements
 * Rsync >= 3.1.0
 * Python >= 3.2 (only tested with 3.4 and higher)
 
-# Usage
-## Configure SSH-keys
+## Usage
+### Configure SSH-keys
 Generate a SSH-key pair for backups and place the public key in 
 `~/.ssh/authorized_keys` for the backup user on the target host.
 Configure the path to the private key in the backup configuration file.
 
-## Create the configuration and rules file
+### Create the configuration and rules file
 Place a configuration file and a rsync rules-file in the conf.d directory.
 Please see the example configuration file for additinal explainations.
 
 * The configuration file must be called: <config>.conf
 * The rsync rules file must be called: <config>.rules
 
-## Manual run
+### Manual run
 Standard backup:
 
     ./backup.py -c <config>
@@ -65,7 +65,7 @@ Additional features:
 
     ./backup.py --help 
 
-## Automatic runs
+### Automatic runs
 There is a run-all.sh script included. This script is meant for running
 all configured backups with configurable concurrency, and is typically what
 you call from cron.
