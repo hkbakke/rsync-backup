@@ -4,29 +4,29 @@ Its purpose is to run all backups efficiently from a central backup server,
 including automatic backup verification and email reporting.
 
 ## Backup overview
-rsync-backup makes use of rsyncs hard linking features to create efficient
-backups where unchanged files is linked together between backups, minimizing
-the need for extra storage using versioned backups. Rsync only copies changed
-blocks, so network backups are efficient and fast after the initial
+rsync-backup makes use of rsync's hard linking feature to create efficient
+backups where unchanged files are linked together between backups, minimizing
+the need for extra storage when doing versioned backups. Rsync only copies
+changed blocks, so network backups are efficient and fast after the initial
 backup.
 
 rsync-backup implements a configurable current, daily, monthly and yearly
-scheme to reduce the number of kept backups when long retention times are
-used. The storage need is also reduced when using such a scheme compared to
-rolling backups with no efficient trimming of older backups.
+scheme to reduce the number of backups when long retention times are
+used. The storage requirements are also reduced when using such a scheme
+compared to rolling backups with no efficient trimming of older backups.
 
 ## Checksum validation
 rsync-backup grabs the internal checksums rsync is generating when transferring
 new files to avoid having to calculate the checksums manually. It also 
-reuses all checksums for unchanged files from the previous backup so in most 
+reuses all checksums for unchanged files from the previous backup, so in most 
 cases no additional work is needed for a backup.
 It is however smart enough to detect if some files are missing its checksum
 and manually calculates the checksum for these files.
 This typically happens if a backup is stopped before completion and later
 resumed.
 
-The backup checksum file are stored in each backup folder and is generated in a
-md5sum compatible way, so the folder structure can easily be verified by using
+The backup's checksum file is stored in each backup folder and is generated in
+a md5sum compatible way, so the folder structure can easily be verified with
 md5sum if the backup script is not available or the backup is moved.
 
 The current backup is automatically verified within a user defined interval, 
@@ -36,6 +36,10 @@ and every backup can also be verified at will.
 The reporting currently assumes that localhost is correctly configured for
 SMTP and that it handles the forwarding to the correct SMTP-server for external
 communication.
+
+# Requirements
+* Rsync >= v3.1.0
+* Python 3
 
 # Usage
 ## Configure SSH-keys
