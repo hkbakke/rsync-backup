@@ -38,8 +38,8 @@ SMTP and that it handles the forwarding to the correct SMTP-server for external
 communication.
 
 # Requirements
-* Rsync >= v3.1.0
-* Python 3
+* Rsync >= 3.1.0
+* Python >= 3.2 (only tested with 3.4 and higher)
 
 # Usage
 ## Configure SSH-keys
