@@ -43,9 +43,9 @@ communication.
 
 # Usage
 ## Configure SSH-keys
-Generate a SSH-key for backups and place the public key in 
-.ssh/authorized_keys on the target host. Configure the path to the private key
-in the backup configuration file.
+Generate a SSH-key pair for backups and place the public key in 
+`~/.ssh/authorized_keys` for the backup user on the target host.
+Configure the path to the private key in the backup configuration file.
 
 ## Create the configuration and rules file
 Place a configuration file and a rsync rules-file in the conf.d directory.
@@ -55,13 +55,13 @@ Please see the example configuration file for additinal explainations.
 * The rsync rules file must be called: <config>.rules
 
 ## Manual run
-** Standard backup **
+Standard backup:
 
     ./backup.py -c <config>
-** Verify the current backup **
+Verify the current backup:
 
     ./backup.py -c <config> -i
-** Additional features **
+Additional features:
 
     ./backup.py --help 
 
@@ -70,6 +70,6 @@ There is a run-all.sh script included. This script is meant for running
 all configured backups with configurable concurrency, and is typically what
 you call from cron.
 
-** crontab example **
+crontab example:
 
     00 01   * * *       /root/rsync-backup/run-all.sh
