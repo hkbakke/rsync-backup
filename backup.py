@@ -692,9 +692,9 @@ def main():
         action='store_true')
     parser.add_argument(
         '-f', '--checksum-file', metavar='FILE',
-        help='Manually select checksum_file to verify.')
+        help='Manually select checksum file to verify.')
     parser.add_argument(
-        '-t', '--test', help='Dry run the backup. Only logs will be written.',
+        '-t', '--test', help='Dry run backup. Only logs will be written.',
         action='store_true')
     args = parser.parse_args()
 
