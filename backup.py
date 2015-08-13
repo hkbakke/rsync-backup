@@ -310,7 +310,7 @@ class Backup(object):
                 return False
 
         checksum_file = os.path.abspath(checksum_file)
-        LOG.info('Selected checksum_file: %s', checksum_file)
+        LOG.info('Selected checksum file: %s', checksum_file)
         backup_dir = self._get_backup_for_checksum_file(checksum_file)
         self._validate_checksum_file(checksum_file)
         LOG.info('Starting backup verification...')
