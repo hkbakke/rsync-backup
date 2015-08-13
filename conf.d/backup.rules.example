@@ -5,5 +5,8 @@
 + /usr/
 + /usr/local/***
 + /var/
++ /var/spool/
++ /var/spool/cron/
++ /var/spool/cron/crontabs/***
 + /var/www/***
 - *
