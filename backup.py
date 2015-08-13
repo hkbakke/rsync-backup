@@ -500,7 +500,7 @@ class Backup(object):
 
         checksums = rsync_checksums
         previous_checksum_file = self._get_checksum_file(
-            self._get_latest_backup)
+            self._get_latest_backup())
         if previous_checksum_file:
             LOG.info(
                 'Reusing unchanged checksums from %s', previous_checksum_file)
