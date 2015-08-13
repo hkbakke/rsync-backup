@@ -1,0 +1,3 @@
+# Ignore configuration files used for testing
+conf.d/*.conf
+conf.d/*.rules
