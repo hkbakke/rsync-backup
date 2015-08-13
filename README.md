@@ -43,8 +43,8 @@ communication.
 
 ## Usage
 ### Configure SSH-keys
-Generate a SSH-key pair for backups and place the public key in 
-`~/.ssh/authorized_keys` for the backup user on the target host.
+Generate a SSH key pair for backups and place the public key in 
+`~/.ssh/authorized_keys` for the backup user on the source host.
 Configure the path to the private key in the backup configuration file.
 
 ### Create a configuration and rules file
@@ -62,6 +62,12 @@ Standard backup:
 Verify the current backup:
 
     ./backup.py -c <config> -i
+Verify a specific backup (example path):
+
+    ./backup.py -c <config> -i /srv/rsync-backup/<config>/monthly_2015-04-01-010005/
+Dry run backup:
+
+    ./backup.py -c <config> -t
 Additional features:
 
     ./backup.py --help 
