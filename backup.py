@@ -295,19 +295,19 @@ class Backup(object):
 
         return True
 
-    def verify(self, checksum_file=None):
+    def verify(self, backup_dir='_current_'):
         LOG.info(
             'Initializing checksum verification for %s',
             self.config.get('general', 'backuproot'))
         self.status = 15
 
-        if not checksum_file:
+        if backup_dir == '_current_':
             backup_dir = self._get_latest_backup()
-            checksum_file = self._get_checksum_file_for_backup(backup_dir)
-            if not checksum_file:
-                LOG.warning(
-                    'There is no checksum file to verify for this backup')
-                return False
+
+        checksum_file = self._get_checksum_file(backup_dir)
+        if not checksum_file:
+            LOG.warning('There is no checksum file to verify for this backup')
+            return False
 
         checksum_file = os.path.abspath(checksum_file)
         LOG.info('Selected checksum file: %s', checksum_file)
@@ -499,7 +499,8 @@ class Backup(object):
             for filename in self._get_files_recursive(backup_dir)}
 
         checksums = rsync_checksums
-        previous_checksum_file = self._get_latest_checksum_file()
+        previous_checksum_file = self._get_checksum_file(
+            self._get_latest_backup)
         if previous_checksum_file:
             LOG.info(
                 'Reusing unchanged checksums from %s', previous_checksum_file)
@@ -595,12 +596,7 @@ class Backup(object):
             backup = None
         return backup
 
-    def _get_latest_checksum_file(self):
-        latest_backup = self._get_latest_backup()
-        if latest_backup:
-            return self._get_checksum_file_for_backup(latest_backup)
-
-    def _get_checksum_file_for_backup(self, backup):
+    def _get_checksum_file(self, backup):
         checksum_file = os.path.join(
             os.path.dirname(backup), self.checksum_filename)
         if os.path.exists(checksum_file):
@@ -688,11 +684,9 @@ def main():
         '-q', '--quiet', help='Suppress output from script.',
         action='store_true')
     parser.add_argument(
-        '-i', '--verify', help='Verify the integrity of the latest backup.',
-        action='store_true')
-    parser.add_argument(
-        '-f', '--checksum-file', metavar='FILE',
-        help='Manually select checksum file to verify.')
+        '-i', '--verify', metavar='PATH', nargs='?', const='_current_',
+        help='Verify the integrity of the selected backup. If no PATH is '
+            'given the current backup is selected.')
     parser.add_argument(
         '-t', '--test', help='Dry run backup. Only logs will be written.',
         action='store_true')
@@ -708,8 +702,8 @@ def main():
     success = False
 
     try:
-        if args.verify or args.checksum_file:
-            backup.verify(args.checksum_file)
+        if args.verify:
+            backup.verify(args.verify)
         else:
             backup.do_backup(args.test)
             if not args.test:
