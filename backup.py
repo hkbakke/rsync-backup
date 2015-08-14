@@ -344,7 +344,7 @@ class Backup(object):
             return False
         else:
             self.status = 'Backup verification completed successfully!'
-            LOG.info('Backup verification completed successfully!')
+            LOG.info(self.status)
             return True
 
     def _display_verification_stats(self, stats):
@@ -436,7 +436,11 @@ class Backup(object):
             self._remove_old_backups()
             self._remove_old_log_files()
 
-        self.status = 'Backup completed successfully!'
+        if test:
+            self.status = 'Dry run completed successfully!'
+        else:
+            self.status = 'Backup completed successfully!'
+
         LOG.info(self.status)
 
     def _create_interval_backups(self, current_backup):
