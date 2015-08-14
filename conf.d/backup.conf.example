@@ -5,7 +5,7 @@ backuplabel = example
 
 # The folder on this computer to backup to. This also includes logs and 
 # checksumfiles.
-backuproot = /srv/backups/$(backuplabel)
+backuproot = /srv/backups/${backuplabel}
 
 # Set the number of days between automatic backup verifications based on the 
 # calculated checksums. Only the last backup will be verified automatically,
@@ -14,7 +14,7 @@ backuproot = /srv/backups/$(backuplabel)
 days_between_verifications = 7
 
 # The directory to store logs in
-log_dir = /srv/backups/$(backuplabel)/logs
+log_dir = /srv/backups/${backuplabel}/logs
 
 
 [rsync]
@@ -36,7 +36,7 @@ source_dir = /
 additional_options = --numeric-ids --partial-dir=.rsync-partial --timeout=600
 
 # IP/name of the computer to backup. Ignored if rsync_mode is local
-source_host = $(general:backuplabel)
+source_host = ${general:backuplabel}
 
 # These parameters are only used if rsync_mode is ssh.
 # ssh_user specifies the user you want to run the backup as on the
@@ -60,7 +60,7 @@ link_to_logs = false
 
 # The following parameter is only used if link_to_logs is true.
 # log_baseurl specifies the base URL to use for reaching the logfiles.
-logs_baseurl = https://backup.example.com/rsync-backup/$(general:backuplabel)/logs/
+logs_baseurl = https://backup.example.com/rsync-backup/${general:backuplabel}/logs/
 
 # Send summary reports using this interval. If a backup job fail a
 # notification mail will get sent regardless of this setting.
