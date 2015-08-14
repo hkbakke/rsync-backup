@@ -5,7 +5,7 @@ backuplabel = example
 
 # The folder on this computer to backup to. This also includes logs and 
 # checksumfiles.
-backuproot = /srv/backups/${backuplabel}
+backuproot = /srv/rsync-backup/${backuplabel}
 
 # Set the number of days between automatic backup verifications based on the 
 # calculated checksums. Only the last backup will be verified automatically,
@@ -14,7 +14,7 @@ backuproot = /srv/backups/${backuplabel}
 days_between_verifications = 7
 
 # The directory to store logs in
-log_dir = /srv/backups/${backuplabel}/logs
+log_dir = /srv/rsync-backup/${backuplabel}/logs
 
 
 [rsync]
