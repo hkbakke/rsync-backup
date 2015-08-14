@@ -9,4 +9,9 @@
 + /var/spool/cron/
 + /var/spool/cron/crontabs/***
 + /var/www/***
+
+# This "exclude everything" rule at the end is important for --delete to 
+# work correctly when resuming incomplete backups. It will ensure that files
+# that are already transferred to the incomplete backup and then deleted from
+# the source, are properly removed from the incomplete backup when resumed.
 - *
