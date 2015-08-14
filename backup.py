@@ -304,6 +304,9 @@ class Backup(object):
         if backup_dir == '_current_':
             backup_dir = self._get_latest_backup()
 
+        if not backup_dir:
+            raise BackupException('There is no backup to verify')
+
         checksum_file = self._get_checksum_file(backup_dir)
         if not checksum_file:
             LOG.warning('There is no checksum file to verify for this backup')
