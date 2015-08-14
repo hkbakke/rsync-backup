@@ -45,16 +45,6 @@ class Backup(object):
             os.path.join(self.config.get('general', 'backuproot'), 'cache'))
         self.checksum_filename = 'checksums.md5'
 
-        # Load status mapping
-        self.statuses = {
-            10: 'Backup completed successfully!',
-            11: 'Backup failed!',
-            12: 'Backup aborted by user!',
-            14: 'Backup verification completed successfully!',
-            15: 'Backup verification failed!',
-            17: 'Unknown status',
-        }
-
         # Configure default values for backup intervals
         self.intervals = {
             'current': {
@@ -350,11 +340,11 @@ class Backup(object):
                 LOG_CLEAN.warning(
                     '%s | current: %s | stored: %s', file_path,
                     stored_checksum, current_checksum)
-                LOG.error(self.statuses[self.status])
+                LOG.error(self.get_status_msg())
             return False
         else:
             self.status = 14
-            LOG.info(self.statuses[self.status])
+            LOG.info(self.get_status_msg())
             return True
 
     def _display_verification_stats(self, stats):
@@ -447,7 +437,7 @@ class Backup(object):
             self._remove_old_log_files()
 
         self.status = 10
-        LOG.info(self.statuses[self.status])
+        LOG.info(self.get_status_msg())
 
     def _create_interval_backups(self, current_backup):
         for interval in self.intervals:
@@ -576,6 +566,21 @@ class Backup(object):
     def get_status(self):
         return self.status
 
+    def get_status_msg(self, status_id=None):
+        if status_id == None:
+            status_id = self.status
+
+        statuses = {
+            10: 'Backup completed successfully!',
+            11: 'Backup failed!',
+            12: 'Backup aborted by user!',
+            14: 'Backup verification completed successfully!',
+            15: 'Backup verification failed!',
+            17: 'Unknown status',
+        }
+
+        return statuses[status_id]
+
     def _get_incomplete_backup(self):
         for backup_path in os.listdir(self.config.get('general', 'backuproot')):
             if re.match(r'^incomplete_[0-9-]{17}$', backup_path):
@@ -619,11 +624,11 @@ class Backup(object):
                         log_file, self.config.get('general', 'log_dir')))
                 summary = '%s%s: %s [ %s ]\n' % (
                     summary, os.path.splitext(os.path.basename(log_file))[0],
-                    self.statuses[end_status], url)
+                    self.get_status_msg(end_status), url)
             else:
                 summary = '%s%s: %s\n' % (
                     summary, os.path.splitext(os.path.basename(log_file))[0],
-                    self.statuses[end_status])
+                    self.get_status_msg(end_status))
 
         msgtext = """\
 %s: %s
@@ -665,10 +670,10 @@ Summary
 
         if not success:
             self._send_mail(
-                self.statuses[self.status], [(self.status, self.log_file)])
+                self.get_status_msg(), [(self.status, self.log_file)])
         elif not last_report:
             self._send_mail(
-                self.statuses[self.status], [(self.status, self.log_file)])
+                self.get_status_msg(), [(self.status, self.log_file)])
             self._write_timestamp_to_file(last_report_file)
         elif ((datetime.now() - last_report).days >
                 self.config.getint('reporting', 'days_between_reports')):
