@@ -34,7 +34,7 @@ class Backup(object):
         self.config.read_file(open(configfile))
         self.rules = configfile.replace('.conf', '.rules')
         self.pid_created = False
-        self.status = 11
+        self.status = 'Backup failed!'
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
         self.log_file = os.path.join(
             self.config.get('general', 'log_dir'), '%s.log' % self.timestamp)
@@ -174,13 +174,13 @@ class Backup(object):
                 f.write(checksum + b'  ' + filename + b'\n')
 
     @staticmethod
-    def _get_end_status_from_log_file(log_file):
+    def _get_end_status(log_file):
         with open(log_file, 'r') as f:
             lastline = f.readlines()[-1]
             if 'END STATUS:' in lastline:
-                return int(lastline.split()[-1])
+                return lastline.split('END STATUS: ')[1].strip()
             else:
-                return 17
+                return 'Unknown status'
 
     @staticmethod
     def _get_log_file_datetime(log_file):
@@ -289,7 +289,7 @@ class Backup(object):
         LOG.info(
             'Initializing checksum verification for %s',
             self.config.get('general', 'backuproot'))
-        self.status = 15
+        self.status = 'Backup verification failed!'
 
         if backup_dir == '_current_':
             backup_dir = self._get_latest_backup()
@@ -335,16 +335,16 @@ class Backup(object):
         self._display_verification_stats(stats)
 
         if failed_files:
-            LOG.warning('Files that failed verification:')
+            LOG.error('Files that failed verification:')
             for file_path, current_checksum, stored_checksum in failed_files:
-                LOG_CLEAN.warning(
+                LOG_CLEAN.error(
                     '%s | current: %s | stored: %s', file_path,
                     stored_checksum, current_checksum)
-                LOG.error(self.get_status_msg())
+                LOG.error('Backup verification failed!')
             return False
         else:
-            self.status = 14
-            LOG.info(self.get_status_msg())
+            self.status = 'Backup verification completed successfully!'
+            LOG.info('Backup verification completed successfully!')
             return True
 
     def _display_verification_stats(self, stats):
@@ -408,7 +408,7 @@ class Backup(object):
         return command
 
     def do_backup(self, test=False):
-        self.status = 11
+        self.status = 'Backup failed!'
         dest_dir = os.path.join(
             self.config.get('general', 'backuproot'), 'incomplete_%s' %
             self.timestamp, 'backup')
@@ -436,8 +436,8 @@ class Backup(object):
             self._remove_old_backups()
             self._remove_old_log_files()
 
-        self.status = 10
-        LOG.info(self.get_status_msg())
+        self.status = 'Backup completed successfully!'
+        LOG.info(self.status)
 
     def _create_interval_backups(self, current_backup):
         for interval in self.intervals:
@@ -539,7 +539,7 @@ class Backup(object):
 
             if log_file_datetime > last_report:
                 log_files_to_report.extend([(
-                    self._get_end_status_from_log_file(log_file),
+                    self._get_end_status(log_file),
                     log_file)])
             else:
                 break
@@ -562,24 +562,6 @@ class Backup(object):
         with open(self.pidfile, 'w') as f:
             f.write(pid)
         self.pid_created = True
-
-    def get_status(self):
-        return self.status
-
-    def get_status_msg(self, status_id=None):
-        if status_id == None:
-            status_id = self.status
-
-        statuses = {
-            10: 'Backup completed successfully!',
-            11: 'Backup failed!',
-            12: 'Backup aborted by user!',
-            14: 'Backup verification completed successfully!',
-            15: 'Backup verification failed!',
-            17: 'Unknown status',
-        }
-
-        return statuses[status_id]
 
     def _get_incomplete_backup(self):
         for backup_path in os.listdir(self.config.get('general', 'backuproot')):
@@ -624,11 +606,11 @@ class Backup(object):
                         log_file, self.config.get('general', 'log_dir')))
                 summary = '%s%s: %s [ %s ]\n' % (
                     summary, os.path.splitext(os.path.basename(log_file))[0],
-                    self.get_status_msg(end_status), url)
+                    end_status, url)
             else:
                 summary = '%s%s: %s\n' % (
                     summary, os.path.splitext(os.path.basename(log_file))[0],
-                    self.get_status_msg(end_status))
+                    end_status)
 
         msgtext = """\
 %s: %s
@@ -670,10 +652,10 @@ Summary
 
         if not success:
             self._send_mail(
-                self.get_status_msg(), [(self.status, self.log_file)])
+                self.status, [(self.status, self.log_file)])
         elif not last_report:
             self._send_mail(
-                self.get_status_msg(), [(self.status, self.log_file)])
+                self.status, [(self.status, self.log_file)])
             self._write_timestamp_to_file(last_report_file)
         elif ((datetime.now() - last_report).days >
                 self.config.getint('reporting', 'days_between_reports')):
@@ -723,14 +705,14 @@ def main():
 
         success = True
     except KeyboardInterrupt:
-        LOG.error('Aborted by user')
-        backup.status = 12
+        backup.status = 'Backup aborted by user!'
+        LOG.error(backup.status)
     except BackupException as e:
         LOG.error(str(e))
     finally:
         if not args.test:
             backup.report_status(success)
-        LOG_CLEAN.info('END STATUS: %d', backup.get_status())
+        LOG_CLEAN.info('END STATUS: %s', backup.status)
 
 
 if __name__ == '__main__':
