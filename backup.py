@@ -228,7 +228,8 @@ class Backup(object):
 
     def _prepare_logging(self, quiet):
         formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            '%(asctime)s [%(levelname)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S')
         no_format = logging.Formatter('%(message)s')
 
         # Create file handler for logging to file
