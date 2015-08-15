@@ -75,6 +75,9 @@ class Backup(object):
         self._create_dirs()
         self._prepare_logging(quiet)
 
+    def __del__(self):
+        LOG_CLEAN.info('END STATUS: %s', self.status)
+
     @staticmethod
     def _get_files_recursive(path):
         for root, _, filenames in os.walk(path):
@@ -737,8 +740,6 @@ def main():
         LOG.error(str(e))
     finally:
         backup.report_status(success)
-        LOG_CLEAN.info('END STATUS: %s', backup.status)
-
 
 if __name__ == '__main__':
     main()
