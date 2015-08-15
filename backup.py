@@ -78,6 +78,9 @@ class Backup(object):
     def __del__(self):
         LOG_CLEAN.info('END STATUS: %s', self.status)
 
+        if self.pid_created:
+            os.remove(self.pidfile)
+
     @staticmethod
     def _get_files_recursive(path):
         for root, _, filenames in os.walk(path):
@@ -219,10 +222,6 @@ class Backup(object):
         self._create_dir(self.config.get('general', 'backuproot'))
         self._create_dir(self.config.get('general', 'log_dir'))
         self._create_dir(self.cache_dir)
-
-    def _cleanup(self):
-        if self.pid_created:
-            os.remove(self.pidfile)
 
     def _prepare_logging(self, quiet):
         formatter = logging.Formatter(
