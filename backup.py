@@ -28,14 +28,17 @@ class BackupException(Exception):
 
 class Backup(object):
     def __init__(self, configfile, quiet, test=False):
+        # Ensure stuff needed for the destructor are defined first in case
+        # something breaks during initialization
+        self.status = 'Backup failed!'
+        self.pid_created = False
+
         self.test = test
         current_datetime = datetime.now()
         self.config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
         self.config.read_file(open(configfile))
         self.rules = configfile.replace('.conf', '.rules')
-        self.pid_created = False
-        self.status = 'Backup failed!'
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
         self.log_file = os.path.join(
             self.config.get('general', 'log_dir'), '%s.log' % self.timestamp)
