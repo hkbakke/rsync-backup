@@ -7,14 +7,14 @@ backuplabel = example
 # checksumfiles.
 backuproot = /srv/rsync-backup/${backuplabel}
 
+# The directory to store logs in
+log_dir = ${backuproot}/logs
+
 # Set the number of days between automatic backup verifications based on the 
 # calculated checksums. Only the last backup will be verified automatically,
 # but as files are mostly hardlinked this should be sufficient in most cases.
 # Set to 0 to disable (not recommended).
 days_between_verifications = 7
-
-# The directory to store logs in
-log_dir = /srv/rsync-backup/${backuplabel}/logs
 
 
 [rsync]
