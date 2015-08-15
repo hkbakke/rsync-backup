@@ -27,7 +27,8 @@ class BackupException(Exception):
 
 
 class Backup(object):
-    def __init__(self, configfile, quiet):
+    def __init__(self, configfile, quiet, test=False):
+        self.test = test
         current_datetime = datetime.now()
         self.config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
@@ -43,6 +44,8 @@ class Backup(object):
             self.config.get('general', 'backuplabel'))
         self.cache_dir = os.path.normpath(
             os.path.join(self.config.get('general', 'backuproot'), 'cache'))
+        self.last_verification_file = os.path.join(
+            self.cache_dir, 'last_verification')
         self.checksum_filename = 'checksums.md5'
 
         # Configure default values for backup intervals
@@ -127,7 +130,7 @@ class Backup(object):
             os.makedirs(directory)
 
     @staticmethod
-    def _get_timestamp_from_file(file_path):
+    def _get_timestamp(file_path):
         timestamp_datetime = None
         try:
             with open(file_path, 'r') as f:
@@ -166,9 +169,15 @@ class Backup(object):
 
         return checksums
 
-    @staticmethod
-    def _write_checksum_file(checksum_file, checksums):
-        LOG.info('Adding %d md5 checksums to %s', len(checksums), checksum_file)
+    def _write_checksum_file(self, checksum_file, checksums):
+        if self.test:
+            LOG.info(
+                'Adding %d md5 checksums to %s (DRY RUN)', len(checksums),
+                checksum_file)
+            return
+
+        LOG.info(
+            'Adding %d md5 checksums to %s', len(checksums), checksum_file)
         with open(checksum_file, 'wb') as f:
             for filename, checksum in checksums:
                 f.write(checksum + b'  ' + filename + b'\n')
@@ -194,8 +203,12 @@ class Backup(object):
         if os.path.exists(backup):
             return backup
 
-    @staticmethod
-    def _write_timestamp_to_file(file_path):
+    def _write_timestamp(self, file_path):
+        if self.test:
+            LOG.info('Updating timestamp in %s (DRY RUN)', file_path) 
+            return
+
+        LOG.info('Updating timestamp in %s', file_path) 
         with open(file_path, 'w') as f:
             f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
@@ -239,11 +252,10 @@ class Backup(object):
                 'This is NOT recommended!')
             return
 
-        last_verification_file = os.path.join(
-            self.cache_dir, 'last_verification')
-        last_verified = self._get_timestamp_from_file(last_verification_file)
+        last_verified = self._get_timestamp(
+            self.last_verification_file)
         if not last_verified:
-            self._write_timestamp_to_file(last_verification_file)
+            self._write_timestamp(self.last_verification_file)
             return
 
         days_since_verification = (datetime.now() - last_verified).days
@@ -253,8 +265,7 @@ class Backup(object):
                 'At least %d days have passed since the backup was last '
                 'verified. Initializing verification...',
                 self.config.getint('general', 'days_between_verifications'))
-            if self.verify():
-                self._write_timestamp_to_file(last_verification_file)
+            self.verify()
 
     def _validate_checksum_file(self, checksum_file):
         if not os.path.isfile(checksum_file):
@@ -341,11 +352,11 @@ class Backup(object):
                     '%s | current: %s | stored: %s', file_path,
                     stored_checksum, current_checksum)
                 LOG.error('Backup verification failed!')
-            return False
         else:
             self.status = 'Backup verification completed successfully!'
             LOG.info(self.status)
-            return True
+
+        self._write_timestamp(self.last_verification_file)
 
     def _display_verification_stats(self, stats):
         label_width = 26
@@ -355,12 +366,12 @@ class Backup(object):
                 '{0}: {1}'.format(line[0].ljust(label_width), line[1]))
         LOG_CLEAN.info('')
 
-    def _configure_rsync(self, dest_dir, test=False):
+    def _configure_rsync(self, dest_dir):
         rsync = self.config.get('rsync', 'pathname', fallback='rsync')
         command = [rsync, '-avihh', '--stats', '--out-format=%i %C %n%L']
         command.extend(self.config.get('rsync', 'additional_options').split())
 
-        if test:
+        if self.test:
             command.extend(['-n'])
 
         if self.config.get('rsync', 'mode') == 'ssh':
@@ -394,25 +405,25 @@ class Backup(object):
                 'Incomplete backup found in %s. Resuming...',
                 incomplete_backup)
 
-            if test:
+            if self.test:
                 dest_dir = incomplete_backup
             else:
                 move(incomplete_backup, os.path.dirname(dest_dir))
 
             command.append('--delete-excluded')
         else:
-            if not test:
+            if not self.test:
                 self._create_dir(dest_dir)
 
         command.extend([source, dest_dir])
         return command
 
-    def do_backup(self, test=False):
+    def backup(self):
         self.status = 'Backup failed!'
         dest_dir = os.path.join(
             self.config.get('general', 'backuproot'), 'incomplete_%s' %
             self.timestamp, 'backup')
-        rsync_command = self._configure_rsync(dest_dir, test)
+        rsync_command = self._configure_rsync(dest_dir)
         LOG.info(
             'Starting backup labeled \"%s\" to %s',
             self.config.get('general', 'backuplabel'), dest_dir)
@@ -420,23 +431,24 @@ class Backup(object):
             'Commmand: %s', ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
 
-        if not test:
-            checksums = self._get_checksums(dest_dir, rsync_checksums)
-            checksum_file = os.path.join(
-            os.path.dirname(dest_dir), self.checksum_filename)
-            self._write_checksum_file(checksum_file, checksums)
+        checksums = self._get_checksums(dest_dir, rsync_checksums)
+        checksum_file = os.path.join(
+        os.path.dirname(dest_dir), self.checksum_filename)
+        self._write_checksum_file(checksum_file, checksums)
 
-            # Rename incomplete backup to current and enforce retention
-            current_backup = os.path.join(
-                self.config.get('general', 'backuproot'), 'current_%s' %
-                self.timestamp)
+        # Rename incomplete backup to current and enforce retention
+        current_backup = os.path.join(
+            self.config.get('general', 'backuproot'), 'current_%s' %
+            self.timestamp)
 
+        if not self.test:
             move(os.path.dirname(dest_dir), current_backup)
-            self._create_interval_backups(current_backup)
-            self._remove_old_backups()
-            self._remove_old_log_files()
 
-        if test:
+        self._create_interval_backups(current_backup)
+        self._remove_old_backups()
+        self._remove_old_log_files()
+
+        if self.test:
             self.status = 'Dry run completed successfully!'
         else:
             self.status = 'Backup completed successfully!'
@@ -459,8 +471,13 @@ class Backup(object):
 
             interval_backup = current_backup.replace(
                 'current_', '%s_' % interval)
-            LOG.info('Creating %s', interval_backup)
-            copytree(current_backup, interval_backup, copy_function=os.link)
+
+            if self.test:
+                LOG.info('Creating %s (DRY RUN)', interval_backup)
+            else:
+                LOG.info('Creating %s', interval_backup)
+                copytree(
+                    current_backup, interval_backup, copy_function=os.link)
 
     def _remove_old_backups(self):
         LOG.info('Removing old backups...')
@@ -469,8 +486,11 @@ class Backup(object):
             old_backups.sort(reverse=True)
             for old_backup in old_backups[
                     self.intervals[interval]['retention']:]:
-                LOG.info('Removing %s', old_backup)
-                rmtree(old_backup)
+                if self.test:
+                    LOG.info('Removing %s (DRY RUN)', old_backup)
+                else:
+                    LOG.info('Removing %s', old_backup)
+                    rmtree(old_backup)
 
     def _remove_old_log_files(self):
         retention = self.config.getint('retention', 'logs', fallback=365)
@@ -486,8 +506,11 @@ class Backup(object):
 
             log_datetime = self._get_log_file_datetime(old_log)
             if (datetime.now() - log_datetime).days > retention:
-                LOG.info('Removing %s', old_log)
-                os.unlink(old_log)
+                if self.test:
+                    LOG.info('Removing %s (DRY RUN)', old_log)
+                else:
+                    LOG.info('Removing %s', old_log)
+                    os.unlink(old_log)
 
     def _get_checksums(self, backup_dir, rsync_checksums):
         backup_dir = bytes(backup_dir, 'utf8')
@@ -652,7 +675,7 @@ Summary
             return
 
         last_report_file = os.path.join(self.cache_dir, 'last_report')
-        last_report = self._get_timestamp_from_file(last_report_file)
+        last_report = self._get_timestamp(last_report_file)
 
         if not success:
             self._send_mail(
@@ -660,7 +683,7 @@ Summary
         elif not last_report:
             self._send_mail(
                 self.status, [(self.status, self.log_file)])
-            self._write_timestamp_to_file(last_report_file)
+            self._write_timestamp(last_report_file)
         elif ((datetime.now() - last_report).days >
                 self.config.getint('reporting', 'days_between_reports')):
             log_files = self._get_new_log_files(last_report)
@@ -668,7 +691,7 @@ Summary
                 '%d day backup report'
                 % self.config.getint('reporting', 'days_between_reports'))
             self._send_mail(status, log_files)
-            self._write_timestamp_to_file(last_report_file)
+            self._write_timestamp(last_report_file)
 
 
 def main():
@@ -696,16 +719,15 @@ def main():
         '%s.conf' % args.config_name)
 
     # Initialize the backup object
-    backup = Backup(configfile, args.quiet)
+    backup = Backup(configfile, args.quiet, args.test)
     success = False
 
     try:
         if args.verify:
             backup.verify(args.verify)
         else:
-            backup.do_backup(args.test)
-            if not args.test:
-                backup.schedule_verification()
+            backup.backup()
+            backup.schedule_verification()
 
         success = True
     except KeyboardInterrupt:
@@ -714,8 +736,7 @@ def main():
     except BackupException as e:
         LOG.error(str(e))
     finally:
-        if not args.test:
-            backup.report_status(success)
+        backup.report_status(success)
         LOG_CLEAN.info('END STATUS: %s', backup.status)
 
 
