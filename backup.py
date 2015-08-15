@@ -449,7 +449,7 @@ class Backup(object):
 
         self._create_interval_backups(current_backup)
         self._remove_old_backups()
-        self._remove_old_log_files()
+        self._remove_old_logs()
 
         if self.test:
             self.status = 'Dry run completed successfully!'
@@ -495,13 +495,13 @@ class Backup(object):
                     LOG.info('Removing %s', old_backup)
                     rmtree(old_backup)
 
-    def _remove_old_log_files(self):
+    def _remove_old_logs(self):
         retention = self.config.getint('retention', 'logs', fallback=365)
         if retention < 1:
             return
 
         LOG.info('Removing backup logs older than %d days...', retention)
-        old_logs = [i for i in self._get_log_files()]
+        old_logs = [i for i in self._get_logs()]
         old_logs.sort(reverse=True)
         for old_log in old_logs:
             if old_log == self.log_file:
@@ -557,25 +557,25 @@ class Backup(object):
 
         return checksums
 
-    def _get_new_log_files(self, last_report):
-        log_files_to_report = list()
+    def _get_new_logs(self, last_report):
+        logs_to_report = list()
 
-        for log_file in sorted(self._get_log_files(), reverse=True):
+        for log_file in sorted(self._get_logs(), reverse=True):
             log_file_datetime = self._get_log_file_datetime(log_file)
 
             if log_file == self.log_file:
-                log_files_to_report.extend([(self.status, log_file)])
+                logs_to_report.extend([(self.status, log_file)])
                 continue
 
             if log_file_datetime > last_report:
-                log_files_to_report.extend([(
+                logs_to_report.extend([(
                     self._get_end_status(log_file),
                     log_file)])
             else:
                 break
 
         return sorted(
-            log_files_to_report,
+            logs_to_report,
             key=lambda log_file_status: log_file_status[1],
             reverse=True)
 
@@ -605,7 +605,7 @@ class Backup(object):
                 yield os.path.join(
                     self.config.get('general', 'backuproot'), backup_path)
 
-    def _get_log_files(self):
+    def _get_logs(self):
         for log_file_path in os.listdir(self.config.get('general', 'log_dir')):
             if re.match(r'^[0-9-]{17}.log$', log_file_path):
                 yield os.path.join(
@@ -626,9 +626,9 @@ class Backup(object):
         if os.path.exists(checksum_file):
             return checksum_file
 
-    def _send_mail(self, status, log_files):
+    def _send_mail(self, status, logs):
         summary = ''
-        for end_status, log_file in log_files:
+        for end_status, log_file in logs:
             if self.config.getboolean('reporting', 'link_to_logs'):
                 url = '%s/%s' % (
                     self.config.get('reporting', 'logs_baseurl').rstrip('/'),
@@ -689,11 +689,11 @@ Summary
             self._write_timestamp(last_report_file)
         elif ((datetime.now() - last_report).days >
                 self.config.getint('reporting', 'days_between_reports')):
-            log_files = self._get_new_log_files(last_report)
+            logs = self._get_new_logs(last_report)
             status = (
                 '%d day backup report'
                 % self.config.getint('reporting', 'days_between_reports'))
-            self._send_mail(status, log_files)
+            self._send_mail(status, logs)
             self._write_timestamp(last_report_file)
 
 
