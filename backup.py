@@ -339,9 +339,10 @@ class Backup(object):
                 verified_count += 1
             else:
                 failed_count += 1
-                failed_files.append(
-                    [file_path, current_checksum, stored_checksum])
-                LOG_CLEAN.warning('[ FAILED ] %s', file_path.decode('utf8'))
+                LOG_CLEAN.error(
+                    '[FAILED] %s [%s => %s]', file_path.decode('utf8'),
+                    current_checksum.decode('utf8'),
+                    stored_checksum.decode('utf8'))
 
         # Use tuples in a list instead of a dictionary to make the stats output
         # ordered
@@ -351,13 +352,8 @@ class Backup(object):
         stats.extend([('Failed verifications', failed_count)])
         self._display_verification_stats(stats)
 
-        if failed_files:
-            LOG.error('Files that failed verification:')
-            for file_path, current_checksum, stored_checksum in failed_files:
-                LOG_CLEAN.error(
-                    '%s | current: %s | stored: %s', file_path,
-                    stored_checksum, current_checksum)
-                LOG.error('Backup verification failed!')
+        if failed_count != 0:
+            LOG.error('Backup verification failed!')
         else:
             self.status = 'Backup verification completed successfully!'
             LOG.info(self.status)
