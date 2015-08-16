@@ -64,7 +64,7 @@ Verify the current backup:
     ./backup.py -c <config> -i
 Verify a specific backup (example path):
 
-    ./backup.py -c <config> -i /srv/rsync-backup/<config>/monthly_2015-04-01-010005/
+    ./backup.py -c <config> -i /srv/rsync-backup/<backuplabel>/monthly_2015-04-01-010005/
 Dry run backup:
 
     ./backup.py -c <config> -t
