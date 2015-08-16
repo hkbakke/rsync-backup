@@ -206,12 +206,6 @@ class Backup(object):
         if timestamp:
             return datetime.strptime(timestamp.group(1), '%Y-%m-%d-%H%M%S')
 
-    @staticmethod
-    def _get_backup_for_checksum_file(checksum_file):
-        backup = os.path.join(os.path.dirname(checksum_file), 'backup')
-        if os.path.exists(backup):
-            return backup
-
     def _write_timestamp(self, file_path):
         if self.test:
             LOG.info('Updating timestamp in %s (DRY RUN)', file_path) 
@@ -273,14 +267,9 @@ class Backup(object):
                 self.config.getint('general', 'days_between_verifications'))
             self.verify()
 
-    def _validate_checksum_file(self, checksum_file):
+    def _validate_checksum_file(self, checksum_file, backup_dir):
         if not os.path.isfile(checksum_file):
             raise BackupException('The file %s does not exist' % checksum_file)
-
-        backup_dir = self._get_backup_for_checksum_file(checksum_file)
-        if not backup_dir:
-            raise BackupException(
-                'Could not find a valid backup for %s' % checksum_file)
 
         checksum_file_unique_files = self._get_line_count(checksum_file, True)
         checksum_file_files = self._get_line_count(checksum_file)
@@ -302,27 +291,27 @@ class Backup(object):
 
         return True
 
-    def verify(self, backup_dir='_current_'):
+    def verify(self, backup='_current_'):
         LOG.info(
             'Initializing checksum verification for %s',
             self.config.get('general', 'backuproot'))
         self.status = 'Backup verification failed!'
 
-        if backup_dir == '_current_':
+        if backup == '_current_':
             backup_dir = self._get_latest_backup()
+        else:
+            backup_dir = self._get_backup_dir(backup)
 
         if not backup_dir:
             raise BackupException('There is no backup to verify')
 
         checksum_file = self._get_checksum_file(backup_dir)
         if not checksum_file:
-            LOG.warning('There is no checksum file to verify for this backup')
-            return False
+            raise BackupException(
+                'There is no checksum file to verify for this backup')
 
-        checksum_file = os.path.abspath(checksum_file)
         LOG.info('Selected checksum file: %s', checksum_file)
-        backup_dir = self._get_backup_for_checksum_file(checksum_file)
-        self._validate_checksum_file(checksum_file)
+        self._validate_checksum_file(checksum_file, backup_dir)
         LOG.info('Starting backup verification...')
         checked_count = 0
         verified_count = 0
@@ -358,7 +347,8 @@ class Backup(object):
             self.status = 'Backup verification completed successfully!'
             LOG.info(self.status)
 
-        self._write_timestamp(self.last_verification_file)
+        if backup == '_current_':
+            self._write_timestamp(self.last_verification_file)
 
     def _display_verification_stats(self, stats):
         label_width = 26
@@ -619,11 +609,27 @@ class Backup(object):
             backup = None
         return backup
 
+    def _get_backup_dir(self, backup):
+        if os.path.split(backup)[0]:
+            raise BackupException('You must specify the folder name of the '
+                'backup, not a path')
+
+        backup_dir = os.path.join(
+            self.config.get('general', 'backuproot'), backup, 'backup')
+
+        if not os.path.isdir(backup_dir):
+            backup_dir = None
+
+        return backup_dir
+
     def _get_checksum_file(self, backup):
         checksum_file = os.path.join(
             os.path.dirname(backup), self.checksum_filename)
-        if os.path.exists(checksum_file):
-            return checksum_file
+
+        if not os.path.exists(checksum_file):
+            checksum_file = None
+
+        return checksum_file
 
     def _send_mail(self, status, logs):
         summary = ''
@@ -707,8 +713,8 @@ def main():
         '-q', '--quiet', help='Suppress output from script.',
         action='store_true')
     parser.add_argument(
-        '-i', '--verify', metavar='PATH', nargs='?', const='_current_',
-        help='Verify the integrity of the selected backup. If no PATH is '
+        '-i', '--verify', metavar='BACKUP', nargs='?', const='_current_',
+        help='Verify the integrity of the selected backup. If no BACKUP is '
             'given the current backup is selected.')
     parser.add_argument(
         '-t', '--test', help='Dry run backup. Only logs will be written.',
