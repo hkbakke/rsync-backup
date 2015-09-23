@@ -188,6 +188,7 @@ class Backup(object):
         LOG.info(
             'Adding %d md5 checksums to %s', len(checksums), checksum_file)
         with open(checksum_file, 'wb') as f:
+            os.chmod(checksum_file, 0o600)
             for filename, checksum in checksums:
                 f.write(checksum + b'  ' + filename + b'\n')
 
