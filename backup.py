@@ -188,7 +188,6 @@ class Backup(object):
         LOG.info(
             'Adding %d md5 checksums to %s', len(checksums), checksum_file)
         with open(checksum_file, 'wb') as f:
-            os.chmod(checksum_file, 0o600)
             for filename, checksum in checksums:
                 f.write(checksum + b'  ' + filename + b'\n')
 
@@ -726,6 +725,10 @@ def main():
     configfile = os.path.join(
         os.path.dirname(os.path.abspath(sys.argv[0])), 'conf.d',
         '%s.conf' % args.config_name)
+
+    # Restrict permissions to the current user for all extra files created
+    # by this script
+    os.umask(0o077)
 
     # Initialize the backup object
     backup = Backup(configfile, args.quiet, args.test)
