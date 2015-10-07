@@ -3,6 +3,12 @@
 # The folder to put all backups in
 backup_dir = /srv/rsync-backup
 
+# Set the default number of days between automatic backup verifications based 
+# on the calculated checksums. Only the last backup will be verified
+# automatically, but as files are mostly hardlinked this should be sufficient 
+# in most cases. Set to 0 to disable (not recommended).
+verification_interval = 7
+
 
 [reporting]
 
@@ -12,13 +18,16 @@ smtp_server = localhost
 # A valid e-mail address to use as from address
 from_addr = backup@example.com
 
+# Default interval for summary reports in days. If a backup job fail a
+# notification mail will get sent regardless of this setting.
+report_interval = 7
+
 
 [retention]
 
 # Set value to 0 to disable a retention category
 
-# These are default retention values that can be overridden in the backup
-# configuration files.
+# Default retention values
 daily = 30
 monthly = 36
 yearly = 5

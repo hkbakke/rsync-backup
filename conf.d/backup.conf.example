@@ -3,11 +3,8 @@
 # The name of the backup.
 backuplabel = example
 
-# Set the number of days between automatic backup verifications based on the 
-# calculated checksums. Only the last backup will be verified automatically,
-# but as files are mostly hardlinked this should be sufficient in most cases.
-# Set to 0 to disable (not recommended).
-days_between_verifications = 7
+# Uncomment to override global value
+#verification_interval = 7
 
 
 [rsync]
@@ -53,17 +50,14 @@ link_to_logs = false
 # It is only used if link_to_logs is true.
 logs_baseurl = https://backup.example.com/rsync-backup/${general:backuplabel}/logs/
 
-# Send summary reports using this interval. If a backup job fail a
-# notification mail will get sent regardless of this setting.
-days_between_reports = 3
+# Uncomment to override global value
+#report_interval = 7
 
 
 [retention]
 
-# Set value to 0 to disable a retention category
+# Uncomment to override global values
 #daily = 30
 #monthly = 36
 #yearly = 5
-
-# How many days to keep log files
 #logs = 365

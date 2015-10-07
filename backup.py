@@ -68,7 +68,7 @@ class Backup(object):
             self.cache_dir, 'last_verification')
         self.checksum_filename = 'checksums.md5'
 
-        # Configure default values for backup intervals
+        # Configure backup intervals
         self.intervals = {
             'current': {
                 'retention': 1
@@ -266,7 +266,11 @@ class Backup(object):
             LOG_CLEAN.addHandler(ch_clean)
 
     def schedule_verification(self):
-        if self.config.getint('general', 'days_between_verifications') == 0:
+        interval = self.config.getint(
+            'general', 'verification_interval',
+            fallback=self.global_config.getint(
+                'general', 'verification_interval'))
+        if interval == 0:
             LOG.warning(
                 'Automatic backup verification is disabled. '
                 'This is NOT recommended!')
@@ -279,12 +283,10 @@ class Backup(object):
             return
 
         days_since_verification = (datetime.now() - last_verified).days
-        if (days_since_verification >
-                self.config.getint('general', 'days_between_verifications')):
+        if (days_since_verification > interval):
             LOG.info(
                 'At least %d days have passed since the backup was last '
-                'verified. Initializing verification...',
-                self.config.getint('general', 'days_between_verifications'))
+                'verified. Initializing verification...', interval)
             self.verify()
 
     def _validate_checksum_file(self, checksum_file, backup_dir):
@@ -698,6 +700,9 @@ Summary
 
         last_report_file = os.path.join(self.cache_dir, 'last_report')
         last_report = self._get_timestamp(last_report_file)
+        interval = self.config.getint(
+            'reporting', 'report_interval',
+            fallback=self.global_config.getint('reporting', 'report_interval'))
 
         if not success:
             self._send_mail(
@@ -706,12 +711,9 @@ Summary
             self._send_mail(
                 self.status, [(self.status, self.log_file)])
             self._write_timestamp(last_report_file)
-        elif ((datetime.now() - last_report).days >
-                self.config.getint('reporting', 'days_between_reports')):
+        elif ((datetime.now() - last_report).days > interval):
             logs = self._get_new_logs(last_report)
-            status = (
-                '%d day backup report'
-                % self.config.getint('reporting', 'days_between_reports'))
+            status = ('%d day backup report' % interval)
             self._send_mail(status, logs)
             self._write_timestamp(last_report_file)
 
