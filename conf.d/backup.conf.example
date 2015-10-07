@@ -3,13 +3,6 @@
 # The name of the backup.
 backuplabel = example
 
-# The folder on this computer to backup to. This also includes logs and 
-# checksumfiles.
-backuproot = /srv/rsync-backup/${backuplabel}
-
-# The directory to store logs in
-log_dir = ${backuproot}/logs
-
 # Set the number of days between automatic backup verifications based on the 
 # calculated checksums. Only the last backup will be verified automatically,
 # but as files are mostly hardlinked this should be sufficient in most cases.
@@ -48,21 +41,16 @@ ssh_key = /root/.ssh/backup
 
 [reporting]
 
-# SMTP server to use for sending email
-smtp_server = localhost
-
 # Comma separated list of email addresses to send end status reports to.
 # A correctly set up MTA is needed.
 to_addrs = admin@example.com
 
-# A valid e-mail address to use as from address
-from_addr = backup@example.com
-
 # Specify if link to logs should be added to e-mail reports
 link_to_logs = false
 
-# The following parameter is only used if link_to_logs is true.
 # log_baseurl specifies the base URL to use for reaching the logfiles.
+# The log filename will be appended to this URL in emails.
+# It is only used if link_to_logs is true.
 logs_baseurl = https://backup.example.com/rsync-backup/${general:backuplabel}/logs/
 
 # Send summary reports using this interval. If a backup job fail a
@@ -73,7 +61,6 @@ days_between_reports = 3
 [retention]
 
 # Set value to 0 to disable a retention category
-
 #daily = 30
 #monthly = 36
 #yearly = 5

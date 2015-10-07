@@ -28,30 +28,42 @@ class BackupException(Exception):
 
 class Backup(object):
     def __init__(self, config_name, quiet, test=False):
+
         # Ensure stuff needed for the destructor are defined first in case
         # something breaks during initialization
         self.status = 'Backup failed!'
         self.pid_created = False
 
-        # Find path to configuration file
-        configfile = os.path.join(
+        # Load the global configuration file
+        configfile_global = os.path.join(
+            os.path.dirname(os.path.abspath(sys.argv[0])), 'rsync-backup.conf')
+        self.global_config = configparser.ConfigParser(
+            interpolation=configparser.ExtendedInterpolation())
+        self.global_config.read_file(open(configfile_global))
+
+        # Load the backup configuration file
+        configfile_backup = os.path.join(
             os.path.dirname(os.path.abspath(sys.argv[0])), 'conf.d',
             '%s.conf' % config_name)
+        self.config = configparser.ConfigParser(
+            interpolation=configparser.ExtendedInterpolation())
+        self.config.read_file(open(configfile_backup))
 
         self.test = test
         current_datetime = datetime.now()
-        self.config = configparser.ConfigParser(
-            interpolation=configparser.ExtendedInterpolation())
-        self.config.read_file(open(configfile))
-        self.rules = configfile.replace('.conf', '.rules')
+
+        self.rules = configfile_backup.replace('.conf', '.rules')
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
-        self.log_file = os.path.join(
-            self.config.get('general', 'log_dir'), '%s.log' % self.timestamp)
+        self.backuproot = os.path.join(
+            self.global_config.get('general', 'backup_dir'),
+            self.config.get('general', 'backuplabel'))
+        self.log_dir = os.path.join(self.backuproot, 'logs')
+        self.log_file = os.path.join(self.log_dir, '%s.log' % self.timestamp)
         self.to_addrs = set(self.config.get('reporting', 'to_addrs').split(','))
         self.pidfile = '/var/run/backup/backup-%s.pid' % (
             self.config.get('general', 'backuplabel'))
         self.cache_dir = os.path.normpath(
-            os.path.join(self.config.get('general', 'backuproot'), 'cache'))
+            os.path.join(self.backuproot, 'cache'))
         self.last_verification_file = os.path.join(
             self.cache_dir, 'last_verification')
         self.checksum_filename = 'checksums.md5'
@@ -63,17 +75,20 @@ class Backup(object):
             },
             'daily': {
                 'retention': self.config.getint(
-                    'retention', 'daily', fallback=30),
+                    'retention', 'daily',
+                    fallback=self.global_config.getint('retention', 'daily')),
                 'pattern': '%s-*' % current_datetime.strftime('%Y-%m-%d')
             },
             'monthly': {
                 'retention': self.config.getint(
-                    'retention', 'monthly', fallback=36),
+                    'retention', 'monthly',
+                    fallback=self.global_config.getint('retention', 'monthly')),
                 'pattern': '%s-*' % current_datetime.strftime('%Y-%m')
             },
             'yearly': {
                 'retention': self.config.getint(
-                    'retention', 'yearly', fallback=5),
+                    'retention', 'yearly',
+                    fallback=self.global_config.getint('retention', 'yearly')),
                 'pattern': '%s-*' % current_datetime.strftime('%Y')
             }
         }
@@ -221,8 +236,8 @@ class Backup(object):
             f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     def _create_dirs(self):
-        self._create_dir(self.config.get('general', 'backuproot'))
-        self._create_dir(self.config.get('general', 'log_dir'))
+        self._create_dir(self.backuproot)
+        self._create_dir(self.log_dir)
         self._create_dir(self.cache_dir)
 
     def _prepare_logging(self, quiet):
@@ -297,9 +312,7 @@ class Backup(object):
         return True
 
     def verify(self, backup='_current_'):
-        LOG.info(
-            'Initializing checksum verification for %s',
-            self.config.get('general', 'backuproot'))
+        LOG.info('Initializing checksum verification for %s', self.backuproot)
         self.status = 'Backup verification failed!'
 
         if backup == '_current_':
@@ -418,8 +431,7 @@ class Backup(object):
     def backup(self):
         self.status = 'Backup failed!'
         dest_dir = os.path.join(
-            self.config.get('general', 'backuproot'), 'incomplete_%s' %
-            self.timestamp, 'backup')
+            self.backuproot, 'incomplete_%s' % self.timestamp, 'backup')
         rsync_command = self._configure_rsync(dest_dir)
         LOG.info(
             'Starting backup labeled \"%s\" to %s',
@@ -435,8 +447,7 @@ class Backup(object):
 
         # Rename incomplete backup to current and enforce retention
         current_backup = os.path.join(
-            self.config.get('general', 'backuproot'), 'current_%s' %
-            self.timestamp)
+            self.backuproot, 'current_%s' % self.timestamp)
 
         if not self.test:
             move(os.path.dirname(dest_dir), current_backup)
@@ -490,7 +501,9 @@ class Backup(object):
                     rmtree(old_backup)
 
     def _remove_old_logs(self):
-        retention = self.config.getint('retention', 'logs', fallback=365)
+        retention = self.config.getint(
+            'retention', 'logs',
+            fallback=self.global_config.getint('retention', 'logs'))
         if retention < 1:
             return
 
@@ -588,22 +601,19 @@ class Backup(object):
         self.pid_created = True
 
     def _get_incomplete_backup(self):
-        for backup_path in os.listdir(self.config.get('general', 'backuproot')):
+        for backup_path in os.listdir(self.backuproot):
             if re.match(r'^incomplete_[0-9-]{17}$', backup_path):
-                return os.path.join(
-                    self.config.get('general', 'backuproot'), backup_path)
+                return os.path.join(self.backuproot, backup_path)
 
     def _get_backups(self, backup_type):
-        for backup_path in os.listdir(self.config.get('general', 'backuproot')):
+        for backup_path in os.listdir(self.backuproot):
             if re.match(r'^%s_[0-9-]{17}$' % backup_type, backup_path):
-                yield os.path.join(
-                    self.config.get('general', 'backuproot'), backup_path)
+                yield os.path.join(self.backuproot, backup_path)
 
     def _get_logs(self):
-        for log_file_path in os.listdir(self.config.get('general', 'log_dir')):
+        for log_file_path in os.listdir(self.log_dir):
             if re.match(r'^[0-9-]{17}.log$', log_file_path):
-                yield os.path.join(
-                    self.config.get('general', 'log_dir'), log_file_path)
+                yield os.path.join(self.log_dir, log_file_path)
 
     def _get_latest_backup(self):
         try:
@@ -619,8 +629,7 @@ class Backup(object):
             raise BackupException('You must specify the folder name of the '
                 'backup, not a path')
 
-        backup_dir = os.path.join(
-            self.config.get('general', 'backuproot'), backup, 'backup')
+        backup_dir = os.path.join(self.backuproot, backup, 'backup')
 
         if not os.path.isdir(backup_dir):
             backup_dir = None
@@ -642,8 +651,7 @@ class Backup(object):
             if self.config.getboolean('reporting', 'link_to_logs'):
                 url = '%s/%s' % (
                     self.config.get('reporting', 'logs_baseurl').rstrip('/'),
-                    os.path.relpath(
-                        log_file, self.config.get('general', 'log_dir')))
+                    os.path.relpath(log_file, self.log_dir))
                 summary = '%s%s: %s [ %s ]\n' % (
                     summary, os.path.splitext(os.path.basename(log_file))[0],
                     end_status, url)
@@ -671,12 +679,13 @@ Summary
         msg = MIMEText(msgtext, 'plain')
         msg['Subject'] = '%s [%s: %s]' % (
             status, self.config.get('general', 'backuplabel'), self.timestamp)
-        msg['From'] = self.config.get('reporting', 'from_addr')
+        msg['From'] = self.global_config.get('reporting', 'from_addr')
         msg['To'] = ','.join(addr for addr in self.to_addrs)
 
-        sender = smtplib.SMTP(self.config.get('reporting', 'smtp_server'))
+        sender = smtplib.SMTP(
+            self.global_config.get('reporting', 'smtp_server'))
         sender.sendmail(
-            self.config.get('reporting', 'from_addr'), self.to_addrs,
+            self.global_config.get('reporting', 'from_addr'), self.to_addrs,
             msg.as_string())
         sender.quit()
 

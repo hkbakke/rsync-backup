@@ -1,0 +1,27 @@
+[general]
+
+# The folder to put all backups in
+backup_dir = /srv/rsync-backup
+
+
+[reporting]
+
+# SMTP server to use for sending email
+smtp_server = localhost
+
+# A valid e-mail address to use as from address
+from_addr = backup@example.com
+
+
+[retention]
+
+# Set value to 0 to disable a retention category
+
+# These are default retention values that can be overridden in the backup
+# configuration files.
+daily = 30
+monthly = 36
+yearly = 5
+
+# Default number of days to keep log files
+logs = 365

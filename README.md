@@ -47,6 +47,10 @@ Generate a SSH key pair for backups and place the public key in
 `~/.ssh/authorized_keys` for the backup user on the source host.
 Configure the path to the private key in the backup configuration file.
 
+### Create the global configuration file
+Place a file called `rsync-backup.conf` in the directory root. An example
+config is included for reference.
+
 ### Create a configuration and rules file
 Place a configuration file and a rsync rules-file in the conf.d directory for
 each backup job. Please see the example configuration file for additional
