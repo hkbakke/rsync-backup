@@ -27,11 +27,16 @@ class BackupException(Exception):
 
 
 class Backup(object):
-    def __init__(self, configfile, quiet, test=False):
+    def __init__(self, config_name, quiet, test=False):
         # Ensure stuff needed for the destructor are defined first in case
         # something breaks during initialization
         self.status = 'Backup failed!'
         self.pid_created = False
+
+        # Find path to configuration file
+        configfile = os.path.join(
+            os.path.dirname(os.path.abspath(sys.argv[0])), 'conf.d',
+            '%s.conf' % config_name)
 
         self.test = test
         current_datetime = datetime.now()
@@ -721,17 +726,12 @@ def main():
         action='store_true')
     args = parser.parse_args()
 
-    # Find path to configuration file
-    configfile = os.path.join(
-        os.path.dirname(os.path.abspath(sys.argv[0])), 'conf.d',
-        '%s.conf' % args.config_name)
-
     # Restrict permissions to the current user for all extra files created
     # by this script
     os.umask(0o077)
 
     # Initialize the backup object
-    backup = Backup(configfile, args.quiet, args.test)
+    backup = Backup(args.config_name, args.quiet, args.test)
     success = False
 
     try:
