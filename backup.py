@@ -669,7 +669,7 @@ Summary
         msg['From'] = self.config.get('reporting', 'from_addr')
         msg['To'] = ','.join(addr for addr in self.to_addrs)
 
-        sender = smtplib.SMTP('localhost')
+        sender = smtplib.SMTP(self.config.get('reporting', 'smtp_server'))
         sender.sendmail(
             self.config.get('reporting', 'from_addr'), self.to_addrs,
             msg.as_string())

@@ -48,6 +48,9 @@ ssh_key = /root/.ssh/backup
 
 [reporting]
 
+# SMTP server to use for sending email
+smtp_server = localhost
+
 # Comma separated list of email addresses to send end status reports to.
 # A correctly set up MTA is needed.
 to_addrs = admin@example.com
