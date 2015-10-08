@@ -56,7 +56,7 @@ class Backup(object):
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
         self.backup_root = os.path.join(
             self.global_config.get('general', 'backup_root'),
-            self.config.get('general', 'backuplabel'))
+            self.config.get('general', 'label'))
         self.log_dir = os.path.join(self.backup_root, 'logs')
         self.log_file = os.path.join(self.log_dir, '%s.log' % self.timestamp)
         self.to_addrs = set(self.config.get(
@@ -64,7 +64,7 @@ class Backup(object):
             fallback=self.global_config.get(
                 'reporting', 'to_addrs')).split(','))
         self.pidfile = '/var/run/backup/backup-%s.pid' % (
-            self.config.get('general', 'backuplabel'))
+            self.config.get('general', 'label'))
         self.cache_dir = os.path.normpath(
             os.path.join(self.backup_root, 'cache'))
         self.last_verification_file = os.path.join(
@@ -440,7 +440,7 @@ class Backup(object):
         rsync_command = self._configure_rsync(dest_dir)
         LOG.info(
             'Starting backup labeled \"%s\" to %s',
-            self.config.get('general', 'backuplabel'), dest_dir)
+            self.config.get('general', 'label'), dest_dir)
         LOG.info(
             'Commmand: %s', ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
@@ -685,12 +685,12 @@ Summary
 %s
 """ % (
             datetime.now().strftime('%Y-%m-%d %H:%M:%S'), status,
-            self.config.get('general', 'backuplabel'), self.timestamp,
+            self.config.get('general', 'label'), self.timestamp,
             summary)
 
         msg = MIMEText(msgtext, 'plain')
         msg['Subject'] = '%s [%s: %s]' % (
-            status, self.config.get('general', 'backuplabel'), self.timestamp)
+            status, self.config.get('general', 'label'), self.timestamp)
         msg['From'] = self.global_config.get('reporting', 'from_addr')
         msg['To'] = ','.join(addr for addr in self.to_addrs)
 

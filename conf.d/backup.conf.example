@@ -1,7 +1,7 @@
 [general]
 
 # The name of the backup.
-backuplabel = example
+label = example
 
 # Uncomment to override global values
 #verification_interval = 7
