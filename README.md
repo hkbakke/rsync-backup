@@ -46,9 +46,9 @@ Configure the path to the private key in the backup configuration file.
 Place a file called `rsync-backup.conf` in the directory root. An example
 config is included for reference.
 
-### Create a configuration and rules file
+### Create the configuration and rules files
 Place a configuration file and a rsync rules-file in the conf.d directory for
-each backup job. Please see the example configuration file for additional
+each backup job. Please see the example files for additional
 explanations.
 
 * The configuration file must be called: `<config>.conf`
