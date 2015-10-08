@@ -54,16 +54,19 @@ class Backup(object):
 
         self.rules = configfile_backup.replace('.conf', '.rules')
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
-        self.backuproot = os.path.join(
-            self.global_config.get('general', 'backup_dir'),
+        self.backup_root = os.path.join(
+            self.global_config.get('general', 'backup_root'),
             self.config.get('general', 'backuplabel'))
-        self.log_dir = os.path.join(self.backuproot, 'logs')
+        self.log_dir = os.path.join(self.backup_root, 'logs')
         self.log_file = os.path.join(self.log_dir, '%s.log' % self.timestamp)
-        self.to_addrs = set(self.config.get('reporting', 'to_addrs').split(','))
+        self.to_addrs = set(self.config.get(
+            'reporting', 'to_addrs',
+            fallback=self.global_config.get(
+                'reporting', 'to_addrs')).split(','))
         self.pidfile = '/var/run/backup/backup-%s.pid' % (
             self.config.get('general', 'backuplabel'))
         self.cache_dir = os.path.normpath(
-            os.path.join(self.backuproot, 'cache'))
+            os.path.join(self.backup_root, 'cache'))
         self.last_verification_file = os.path.join(
             self.cache_dir, 'last_verification')
         self.checksum_filename = 'checksums.md5'
@@ -236,7 +239,7 @@ class Backup(object):
             f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     def _create_dirs(self):
-        self._create_dir(self.backuproot)
+        self._create_dir(self.backup_root)
         self._create_dir(self.log_dir)
         self._create_dir(self.cache_dir)
 
@@ -314,7 +317,7 @@ class Backup(object):
         return True
 
     def verify(self, backup='_current_'):
-        LOG.info('Initializing checksum verification for %s', self.backuproot)
+        LOG.info('Initializing checksum verification for %s', self.backup_root)
         self.status = 'Backup verification failed!'
 
         if backup == '_current_':
@@ -433,7 +436,7 @@ class Backup(object):
     def backup(self):
         self.status = 'Backup failed!'
         dest_dir = os.path.join(
-            self.backuproot, 'incomplete_%s' % self.timestamp, 'backup')
+            self.backup_root, 'incomplete_%s' % self.timestamp, 'backup')
         rsync_command = self._configure_rsync(dest_dir)
         LOG.info(
             'Starting backup labeled \"%s\" to %s',
@@ -449,7 +452,7 @@ class Backup(object):
 
         # Rename incomplete backup to current and enforce retention
         current_backup = os.path.join(
-            self.backuproot, 'current_%s' % self.timestamp)
+            self.backup_root, 'current_%s' % self.timestamp)
 
         if not self.test:
             move(os.path.dirname(dest_dir), current_backup)
@@ -603,14 +606,14 @@ class Backup(object):
         self.pid_created = True
 
     def _get_incomplete_backup(self):
-        for backup_path in os.listdir(self.backuproot):
+        for backup_path in os.listdir(self.backup_root):
             if re.match(r'^incomplete_[0-9-]{17}$', backup_path):
-                return os.path.join(self.backuproot, backup_path)
+                return os.path.join(self.backup_root, backup_path)
 
     def _get_backups(self, backup_type):
-        for backup_path in os.listdir(self.backuproot):
+        for backup_path in os.listdir(self.backup_root):
             if re.match(r'^%s_[0-9-]{17}$' % backup_type, backup_path):
-                yield os.path.join(self.backuproot, backup_path)
+                yield os.path.join(self.backup_root, backup_path)
 
     def _get_logs(self):
         for log_file_path in os.listdir(self.log_dir):
@@ -631,7 +634,7 @@ class Backup(object):
             raise BackupException('You must specify the folder name of the '
                 'backup, not a path')
 
-        backup_dir = os.path.join(self.backuproot, backup, 'backup')
+        backup_dir = os.path.join(self.backup_root, backup, 'backup')
 
         if not os.path.isdir(backup_dir):
             backup_dir = None
@@ -650,10 +653,17 @@ class Backup(object):
     def _send_mail(self, status, logs):
         summary = ''
         for end_status, log_file in logs:
-            if self.config.getboolean('reporting', 'link_to_logs'):
+            link_to_logs = self.config.getboolean(
+                'reporting', 'link_to_logs',
+                fallback=self.global_config.getboolean('reporting',
+                                                       'link_to_logs'))
+            if link_to_logs:
+                base_url = self.global_config.get('reporting', 'base_url')
                 url = '%s/%s' % (
-                    self.config.get('reporting', 'logs_baseurl').rstrip('/'),
-                    os.path.relpath(log_file, self.log_dir))
+                    base_url.rstrip('/'),
+                    os.path.relpath(
+                        log_file,
+                            self.global_config.get('general', 'backup_root')))
                 summary = '%s%s: %s [ %s ]\n' % (
                     summary, os.path.splitext(os.path.basename(log_file))[0],
                     end_status, url)
@@ -737,8 +747,8 @@ def main():
         action='store_true')
     args = parser.parse_args()
 
-    # Restrict permissions to the current user for all extra files created
-    # by this script
+    # Restrict permissions to the current user for all files created
+    # by this script unless overridden by rsync arguments.
     os.umask(0o077)
 
     # Initialize the backup object

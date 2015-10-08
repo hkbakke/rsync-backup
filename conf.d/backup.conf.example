@@ -3,7 +3,7 @@
 # The name of the backup.
 backuplabel = example
 
-# Uncomment to override global value
+# Uncomment to override global values
 #verification_interval = 7
 
 
@@ -38,19 +38,9 @@ ssh_key = /root/.ssh/backup
 
 [reporting]
 
-# Comma separated list of email addresses to send end status reports to.
-# A correctly set up MTA is needed.
-to_addrs = admin@example.com
-
-# Specify if link to logs should be added to e-mail reports
-link_to_logs = false
-
-# log_baseurl specifies the base URL to use for reaching the logfiles.
-# The log filename will be appended to this URL in emails.
-# It is only used if link_to_logs is true.
-logs_baseurl = https://backup.example.com/rsync-backup/${general:backuplabel}/logs/
-
-# Uncomment to override global value
+# Uncomment to override global values
+#to_addrs = admin@example.com
+#link_to_logs = false
 #report_interval = 7
 
 

@@ -1,7 +1,7 @@
 [general]
 
 # The folder to put all backups in
-backup_dir = /srv/rsync-backup
+backup_root = /srv/rsync-backup
 
 # Set the default number of days between automatic backup verifications based 
 # on the calculated checksums. Only the last backup will be verified
@@ -17,6 +17,17 @@ smtp_server = localhost
 
 # A valid e-mail address to use as from address
 from_addr = backup@example.com
+
+# Comma separated list of email addresses to send end status reports to.
+to_addrs = admin@example.com
+
+# Specify if link to logs should be added to e-mail reports
+link_to_logs = false
+
+# base_url specifies the URL to use for reaching the backup_root.
+# The relative path to the log filename will be appended to this URL in emails.
+# It is only used if link_to_logs is true.
+base_url = https://backup.example.com/rsync-backup/
 
 # Default interval for summary reports in days. If a backup job fail a
 # notification mail will get sent regardless of this setting.
