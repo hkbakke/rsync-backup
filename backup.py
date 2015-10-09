@@ -248,7 +248,7 @@ class Backup(object):
     def _prepare_logging(self):
         std_format = logging.Formatter(
             '%(asctime)s [%(levelname)s] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S')
+            datefmt='%Y-%m-%dT%H:%M:%S%z')
         no_format = logging.Formatter('%(message)s')
 
         # Create file handler for logging to file
@@ -791,7 +791,7 @@ def main():
     if not args.quiet:
         std_format = logging.Formatter(
             '[%(backup_config)s] %(asctime)s [%(levelname)s] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S')
+            datefmt='%Y-%m-%dT%H:%M:%S%z')
         no_format = logging.Formatter('[%(backup_config)s] %(message)s')
 
         ch = logging.StreamHandler()
