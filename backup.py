@@ -14,6 +14,7 @@ from shutil import rmtree, copytree, move
 import smtplib
 from email.mime.text import MIMEText
 from functools import partial
+from concurrent.futures import ProcessPoolExecutor
 
 
 LOG = logging.getLogger('log')
@@ -27,7 +28,7 @@ class BackupException(Exception):
 
 
 class Backup(object):
-    def __init__(self, config_name, quiet, test=False):
+    def __init__(self, config_name, test=False):
 
         # Ensure stuff needed for the destructor are defined first in case
         # something breaks during initialization
@@ -99,7 +100,7 @@ class Backup(object):
         # Check if backup is already running and set up logging
         self._is_running()
         self._create_dirs()
-        self._prepare_logging(quiet)
+        self._prepare_logging()
 
     def __del__(self):
         LOG_CLEAN.info('END STATUS: %s', self.status)
@@ -243,7 +244,7 @@ class Backup(object):
         self._create_dir(self.log_dir)
         self._create_dir(self.cache_dir)
 
-    def _prepare_logging(self, quiet):
+    def _prepare_logging(self):
         formatter = logging.Formatter(
             '%(asctime)s [%(levelname)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S')
@@ -257,16 +258,6 @@ class Backup(object):
         fh_clean = logging.FileHandler(self.log_file)
         fh_clean.setFormatter(no_format)
         LOG_CLEAN.addHandler(fh_clean)
-
-        # Create console handler for logging to console, unless quiet is set
-        if not quiet:
-            ch = logging.StreamHandler()
-            ch.setFormatter(formatter)
-            LOG.addHandler(ch)
-
-            ch_clean = logging.StreamHandler()
-            ch_clean.setFormatter(no_format)
-            LOG_CLEAN.addHandler(ch_clean)
 
     def schedule_verification(self):
         interval = self.config.getint(
@@ -728,36 +719,13 @@ Summary
             self._write_timestamp(last_report_file)
 
 
-def main():
-    # Get script arguments
-    parser = argparse.ArgumentParser(
-        description='Rsync based backup with checksumming and reporting.')
-    parser.add_argument(
-        '-c', '--config-name', metavar='NAME',
-        help='Set the name of the configuration to use.', required=True)
-    parser.add_argument(
-        '-q', '--quiet', help='Suppress output from script.',
-        action='store_true')
-    parser.add_argument(
-        '-i', '--verify', metavar='BACKUP', nargs='?', const='_current_',
-        help='Verify the integrity of the selected backup. If no BACKUP is '
-            'given the current backup is selected.')
-    parser.add_argument(
-        '-t', '--test', help='Dry run backup. Only logs will be written.',
-        action='store_true')
-    args = parser.parse_args()
-
-    # Restrict permissions to the current user for all files created
-    # by this script unless overridden by rsync arguments.
-    os.umask(0o077)
-
-    # Initialize the backup object
-    backup = Backup(args.config_name, args.quiet, args.test)
+def init_backup(config_name, test, verify):
+    backup = Backup(config_name, test)
     success = False
 
     try:
-        if args.verify:
-            backup.verify(args.verify)
+        if verify:
+            backup.verify(verify)
         else:
             backup.backup()
             backup.schedule_verification()
@@ -770,6 +738,68 @@ def main():
         LOG.error(str(e))
     finally:
         backup.report_status(success)
+
+
+def get_all_configs():
+    conf_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
+                            'conf.d')             
+
+    for conf in os.listdir(conf_dir):
+        if fnmatch.fnmatch(conf, '*.conf'):
+            yield os.path.splitext(conf)[0]
+
+
+def main():
+    # Get script arguments
+    parser = argparse.ArgumentParser(
+        description='Rsync based backup with checksumming and reporting.')
+    parser.add_argument(
+        '-c', '--config-name', metavar='NAME',
+        help='Select specific backup configuration.')
+    parser.add_argument(
+        '-q', '--quiet', help='Suppress output from script.',
+        action='store_true')
+    parser.add_argument(
+        '-i', '--verify', metavar='BACKUP', nargs='?', const='_current_',
+        help='Verify the integrity of the selected backup. If no BACKUP is '
+            'given the current backup is selected.')
+    parser.add_argument(
+        '-t', '--test', help='Dry run backup. Only logs will be written.',
+        action='store_true')
+    parser.add_argument(
+        '-p', '--processes', metavar='N', type=int,
+        help='Number of backups to run in parallel.')
+    args = parser.parse_args()
+
+    # Create console handler for logging to console, unless quiet is set
+    formatter = logging.Formatter(
+        '%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S')
+    no_format = logging.Formatter('%(message)s')
+
+    if not args.quiet:
+        ch = logging.StreamHandler()
+        ch.setFormatter(formatter)
+        LOG.addHandler(ch)
+
+        ch_clean = logging.StreamHandler()
+        ch_clean.setFormatter(no_format)
+        LOG_CLEAN.addHandler(ch_clean)
+
+    # Restrict permissions to the current user for all files created
+    # by this script unless overridden by rsync arguments.
+    os.umask(0o077)
+
+    if not args.config_name:
+        workers = 2
+        if args.processes:
+            workers = args.processes
+
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            for conf in get_all_configs():
+                p = executor.submit(init_backup, conf, args.test, args.verify)
+    else:
+        init_backup(args.config_name, args.test, args.verify)
 
 if __name__ == '__main__':
     main()

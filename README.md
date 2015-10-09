@@ -55,7 +55,10 @@ explanations.
 * The rsync rules file must be called: `<config>.rules`
 
 ### Manual run
-Standard backup:
+Run all configured backups:
+
+    ./backup.py
+Run a specific backup configuration:
 
     ./backup.py -c <config>
 Verify the current backup:
@@ -70,12 +73,3 @@ Dry run backup:
 Additional features:
 
     ./backup.py --help 
-
-### Automatic runs
-There is a run-all.sh script included. This script is meant for running
-all configured backups with configurable concurrency, and is typically what
-you call from cron.
-
-crontab example:
-
-    00 01   * * *       /root/rsync-backup/run-all.sh
