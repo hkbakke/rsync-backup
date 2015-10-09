@@ -92,10 +92,11 @@ If you want to run the backup in a docker container you should do something
 like this:
 
 Build:
+
     cd </path/to/rsync-backup>
     docker build -t rsync-backup .
-    
 Running rsync-backup:
+
     docker run -i -t --rm \
         --name=rsync-backup \
         -v "<host_data_dir>":"<backup_root>" \
