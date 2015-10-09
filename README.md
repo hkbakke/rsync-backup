@@ -86,3 +86,23 @@ sequentially.
 
 The file based logs are not affected by the parallelization, as they are
 written individually per backup.
+
+### Docker
+If you want to run the backup in a docker container you should do something
+like this:
+
+Build:
+    cd </path/to/rsync-backup>
+    docker build -t rsync-backup .
+    
+Running rsync-backup:
+    docker run -i -t --rm \
+        --name=rsync-backup \
+        -v "<host_data_dir>":"<backup_root>" \
+        -v "<host_ssh_dir>":"/root/.ssh" \
+        rsync-backup <backup_args>
+
+The volume `host_ssh_dir` needs to hold the private key and will also have the 
+`known_hosts` file to avoid having to confirm new SSH host keys for every 
+container run. This directory should be dedicated to the docker container, and
+not pointed to i.e. the host's `/root/.ssh` folder.

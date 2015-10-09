@@ -26,7 +26,7 @@ source_dir = /
 additional_options = --numeric-ids --partial-dir=.rsync-partial --timeout=600
 
 # IP/name of the computer to backup. Ignored if rsync_mode is local
-source_host = ${general:backuplabel}
+source_host = ${general:label}
 
 # These parameters are only used if rsync_mode is ssh.
 # ssh_user specifies the user you want to run the backup as on the

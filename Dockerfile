@@ -5,4 +5,6 @@ RUN apt-get update && apt-get install -y \
     rsync \
     python3
 
+COPY . /root/rsync-backup
+
 ENTRYPOINT ["/root/rsync-backup/backup.py"]
