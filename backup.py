@@ -771,13 +771,12 @@ def main():
         help='Number of backups to run in parallel.')
     args = parser.parse_args()
 
-    # Create console handler for logging to console, unless quiet is set
-    formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S')
-    no_format = logging.Formatter('%(message)s')
-
     if not args.quiet:
+        formatter = logging.Formatter(
+            '%(asctime)s [%(levelname)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S')
+        no_format = logging.Formatter('%(message)s')
+
         ch = logging.StreamHandler()
         ch.setFormatter(formatter)
         LOG.addHandler(ch)
@@ -787,7 +786,8 @@ def main():
         LOG_CLEAN.addHandler(ch_clean)
 
     # Restrict permissions to the current user for all files created
-    # by this script unless overridden by rsync arguments.
+    # by this script. This will not affect the backup itself if rsync is 
+    # configured to sync permissions and/or ACLs.
     os.umask(0o077)
 
     if not args.config_name:
