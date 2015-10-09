@@ -28,10 +28,11 @@ class BackupException(Exception):
 
 
 class Backup(object):
-    def __init__(self, config_name, test=False):
+    def __init__(self, config_name, test=False, log_params={}):
 
         # Ensure stuff needed for the destructor are defined first in case
         # something breaks during initialization
+        self.log_params = log_params
         self.status = 'Backup failed!'
         self.pid_created = False
 
@@ -53,6 +54,7 @@ class Backup(object):
         self.test = test
         current_datetime = datetime.now()
 
+        self.log_params['backup_label'] = self.config.get('general', 'label')
         self.rules = configfile_backup.replace('.conf', '.rules')
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
         self.backup_root = os.path.join(
@@ -103,7 +105,7 @@ class Backup(object):
         self._prepare_logging()
 
     def __del__(self):
-        LOG_CLEAN.info('END STATUS: %s', self.status)
+        LOG_CLEAN.info('END STATUS: %s', self.status, extra=self.log_params)
 
         if self.pid_created:
             os.remove(self.pidfile)
@@ -175,8 +177,7 @@ class Backup(object):
             os.unlink(file_path)
         return timestamp_datetime
 
-    @staticmethod
-    def _run_rsync(rsync_command):
+    def _run_rsync(self, rsync_command):
         checksums = list()
         p = subprocess.Popen(
             rsync_command, shell=False, stdout=subprocess.PIPE,
@@ -185,7 +186,7 @@ class Backup(object):
         while p.poll() is None:
             for line in iter(p.stdout.readline, b''):
                 line = line.strip()
-                LOG_CLEAN.info(line.decode('utf8'))
+                LOG_CLEAN.info(line.decode('utf8'), extra=self.log_params)
 
                 # Extract md5 checksum from rsync output for new or
                 # changed files
@@ -204,13 +205,12 @@ class Backup(object):
 
     def _write_checksum_file(self, checksum_file, checksums):
         if self.test:
-            LOG.info(
-                'Adding %d md5 checksums to %s (DRY RUN)', len(checksums),
-                checksum_file)
+            LOG.info('Adding %d md5 checksums to %s (DRY RUN)', len(checksums),
+                     checksum_file, extra=self.log_params)
             return
 
-        LOG.info(
-            'Adding %d md5 checksums to %s', len(checksums), checksum_file)
+        LOG.info('Adding %d md5 checksums to %s', len(checksums),
+                 checksum_file, extra=self.log_params)
         with open(checksum_file, 'wb') as f:
             for filename, checksum in checksums:
                 f.write(checksum + b'  ' + filename + b'\n')
@@ -232,10 +232,11 @@ class Backup(object):
 
     def _write_timestamp(self, file_path):
         if self.test:
-            LOG.info('Updating timestamp in %s (DRY RUN)', file_path) 
+            LOG.info('Updating timestamp in %s (DRY RUN)', file_path,
+                     extra=self.log_params) 
             return
 
-        LOG.info('Updating timestamp in %s', file_path) 
+        LOG.info('Updating timestamp in %s', file_path, extra=self.log_params) 
         with open(file_path, 'w') as f:
             f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
@@ -245,14 +246,14 @@ class Backup(object):
         self._create_dir(self.cache_dir)
 
     def _prepare_logging(self):
-        formatter = logging.Formatter(
+        std_format = logging.Formatter(
             '%(asctime)s [%(levelname)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S')
         no_format = logging.Formatter('%(message)s')
 
         # Create file handler for logging to file
         fh = logging.FileHandler(self.log_file)
-        fh.setFormatter(formatter)
+        fh.setFormatter(std_format)
         LOG.addHandler(fh)
 
         fh_clean = logging.FileHandler(self.log_file)
@@ -265,9 +266,8 @@ class Backup(object):
             fallback=self.global_config.getint(
                 'general', 'verification_interval'))
         if interval == 0:
-            LOG.warning(
-                'Automatic backup verification is disabled. '
-                'This is NOT recommended!')
+            LOG.warning('Automatic backup verification is disabled. '
+                        'This is NOT recommended!', extra=self.log_params)
             return
 
         last_verified = self._get_timestamp(
@@ -278,9 +278,9 @@ class Backup(object):
 
         days_since_verification = (datetime.now() - last_verified).days
         if (days_since_verification > interval):
-            LOG.info(
-                'At least %d days have passed since the backup was last '
-                'verified. Initializing verification...', interval)
+            LOG.info('At least %d days have passed since the backup was last '
+                     'verified. Initializing verification...', interval,
+                     extra=self.log_params)
             self.verify()
 
     def _validate_checksum_file(self, checksum_file, backup_dir):
@@ -308,7 +308,8 @@ class Backup(object):
         return True
 
     def verify(self, backup='_current_'):
-        LOG.info('Initializing checksum verification for %s', self.backup_root)
+        LOG.info('Initializing checksum verification for %s',
+                 self.backup_root, extra=self.log_params)
         self.status = 'Backup verification failed!'
 
         if backup == '_current_':
@@ -324,9 +325,10 @@ class Backup(object):
             raise BackupException(
                 'There is no checksum file to verify for this backup')
 
-        LOG.info('Selected checksum file: %s', checksum_file)
+        LOG.info('Selected checksum file: %s', checksum_file,
+                 extra=self.log_params)
         self._validate_checksum_file(checksum_file, backup_dir)
-        LOG.info('Starting backup verification...')
+        LOG.info('Starting backup verification...', extra=self.log_params)
         checked_count = 0
         verified_count = 0
         failed_count = 0
@@ -342,10 +344,11 @@ class Backup(object):
                 verified_count += 1
             else:
                 failed_count += 1
-                LOG_CLEAN.error(
-                    '[FAILED] %s [%s => %s]', file_path.decode('utf8'),
-                    current_checksum.decode('utf8'),
-                    stored_checksum.decode('utf8'))
+                LOG_CLEAN.error('[FAILED] %s [%s => %s]',
+                                file_path.decode('utf8'),
+                                current_checksum.decode('utf8'),
+                                stored_checksum.decode('utf8'),
+                                extra=self.log_params)
 
         # Use tuples in a list instead of a dictionary to make the stats output
         # ordered
@@ -356,21 +359,22 @@ class Backup(object):
         self._display_verification_stats(stats)
 
         if failed_count != 0:
-            LOG.error('Backup verification failed!')
+            LOG.error('Backup verification failed!', extra=self.log_params)
         else:
             self.status = 'Backup verification completed successfully!'
-            LOG.info(self.status)
+            LOG.info(self.status, extra=self.log_params)
 
         if backup == '_current_':
             self._write_timestamp(self.last_verification_file)
 
     def _display_verification_stats(self, stats):
         label_width = 26
-        LOG_CLEAN.info('')
+        LOG_CLEAN.info('', extra=self.log_params)
         for line in stats:
-            LOG_CLEAN.info(
-                '{0}: {1}'.format(line[0].ljust(label_width), line[1]))
-        LOG_CLEAN.info('')
+            LOG_CLEAN.info('{0}: {1}'.format(line[0].ljust(label_width),
+                           line[1]),
+                           extra=self.log_params)
+        LOG_CLEAN.info('', extra=self.log_params)
 
     def _configure_rsync(self, dest_dir):
         rsync = self.config.get('rsync', 'pathname', fallback='rsync')
@@ -407,9 +411,8 @@ class Backup(object):
         incomplete_backup = self._get_incomplete_backup()
 
         if incomplete_backup:
-            LOG.info(
-                'Incomplete backup found in %s. Resuming...',
-                incomplete_backup)
+            LOG.info('Incomplete backup found in %s. Resuming...',
+                     incomplete_backup, extra=self.log_params)
 
             if self.test:
                 dest_dir = incomplete_backup
@@ -429,11 +432,12 @@ class Backup(object):
         dest_dir = os.path.join(
             self.backup_root, 'incomplete_%s' % self.timestamp, 'backup')
         rsync_command = self._configure_rsync(dest_dir)
-        LOG.info(
-            'Starting backup labeled \"%s\" to %s',
-            self.config.get('general', 'label'), dest_dir)
-        LOG.info(
-            'Commmand: %s', ' '.join(element for element in rsync_command))
+        LOG.info('Starting backup labeled \"%s\" to %s',
+                 self.config.get('general', 'label'), dest_dir,
+                 extra=self.log_params)
+        LOG.info('Commmand: %s',
+                 ' '.join(element for element in rsync_command),
+                 extra=self.log_params)
         rsync_checksums = self._run_rsync(rsync_command)
 
         checksums = self._get_checksums(dest_dir, rsync_checksums)
@@ -457,7 +461,7 @@ class Backup(object):
         else:
             self.status = 'Backup completed successfully!'
 
-        LOG.info(self.status)
+        LOG.info(self.status, extra=self.log_params)
 
     def _create_interval_backups(self, current_backup):
         for interval in self.intervals:
@@ -477,23 +481,25 @@ class Backup(object):
                 'current_', '%s_' % interval)
 
             if self.test:
-                LOG.info('Creating %s (DRY RUN)', interval_backup)
+                LOG.info('Creating %s (DRY RUN)', interval_backup,
+                         extra=self.log_params)
             else:
-                LOG.info('Creating %s', interval_backup)
+                LOG.info('Creating %s', interval_backup, extra=self.log_params)
                 copytree(
                     current_backup, interval_backup, copy_function=os.link)
 
     def _remove_old_backups(self):
-        LOG.info('Removing old backups...')
+        LOG.info('Removing old backups...', extra=self.log_params)
         for interval in self.intervals:
             old_backups = [i for i in self._get_backups(interval)]
             old_backups.sort(reverse=True)
             for old_backup in old_backups[
                     self.intervals[interval]['retention']:]:
                 if self.test:
-                    LOG.info('Removing %s (DRY RUN)', old_backup)
+                    LOG.info('Removing %s (DRY RUN)', old_backup,
+                             extra=self.log_params)
                 else:
-                    LOG.info('Removing %s', old_backup)
+                    LOG.info('Removing %s', old_backup, extra=self.log_params)
                     rmtree(old_backup)
 
     def _remove_old_logs(self):
@@ -503,7 +509,8 @@ class Backup(object):
         if retention < 1:
             return
 
-        LOG.info('Removing backup logs older than %d days...', retention)
+        LOG.info('Removing backup logs older than %d days...', retention,
+                 extra=self.log_params)
         old_logs = [i for i in self._get_logs()]
         old_logs.sort(reverse=True)
         for old_log in old_logs:
@@ -513,9 +520,10 @@ class Backup(object):
             log_datetime = self._get_log_file_datetime(old_log)
             if (datetime.now() - log_datetime).days > retention:
                 if self.test:
-                    LOG.info('Removing %s (DRY RUN)', old_log)
+                    LOG.info('Removing %s (DRY RUN)', old_log,
+                             extra=self.log_params)
                 else:
-                    LOG.info('Removing %s', old_log)
+                    LOG.info('Removing %s', old_log, extra=self.log_params)
                     os.unlink(old_log)
 
     def _get_checksums(self, backup_dir, rsync_checksums):
@@ -532,8 +540,8 @@ class Backup(object):
             previous_checksum_file = self._get_checksum_file(latest_backup)
 
         if previous_checksum_file:
-            LOG.info(
-                'Reusing unchanged checksums from %s', previous_checksum_file)
+            LOG.info('Reusing unchanged checksums from %s',
+                     previous_checksum_file, extra=self.log_params)
             unchanged_files = current_files.difference(
                 {rsynced_file[0] for rsynced_file in rsync_checksums})
 
@@ -547,8 +555,8 @@ class Backup(object):
         # transferred in a resumed backup.
         need_checksum = current_files.difference(
             {checksum[0] for checksum in checksums})
-        LOG.info(
-            'Calculating checksum for %d additional files', len(need_checksum))
+        LOG.info('Calculating checksum for %d additional files',
+                 len(need_checksum), extra=self.log_params)
         for filename in need_checksum:
             filename_path = os.path.join(backup_dir, filename)
             if os.path.islink(filename_path):
@@ -694,9 +702,8 @@ Summary
 
     def report_status(self, success):
         if self.to_addrs == set(['']):
-            LOG.info(
-                'Mail reporting is disabled. Set "to_addrs" in the '
-                'configuration file to enable')
+            LOG.info('Mail reporting is disabled. Set "to_addrs" in the '
+                     'configuration file to enable', extra=self.log_params)
             return
 
         last_report_file = os.path.join(self.cache_dir, 'last_report')
@@ -720,7 +727,12 @@ Summary
 
 
 def init_backup(config_name, test, verify):
-    backup = Backup(config_name, test)
+    log_params = {
+        'backup_config': config_name,
+        'backup_label': '-'
+    }
+
+    backup = Backup(config_name, test, log_params)
     success = False
 
     try:
@@ -733,9 +745,9 @@ def init_backup(config_name, test, verify):
         success = True
     except KeyboardInterrupt:
         backup.status = 'Backup aborted by user!'
-        LOG.error(backup.status)
+        LOG.error(backup.status, extra=log_params)
     except BackupException as e:
-        LOG.error(str(e))
+        LOG.error(str(e), extra=log_params)
     finally:
         backup.report_status(success)
 
@@ -771,24 +783,24 @@ def main():
         help='Number of backups to run in parallel.')
     args = parser.parse_args()
 
+    # Restrict permissions to the current user for all files created
+    # by this script. This will not affect the backup itself if rsync is 
+    # configured to sync permissions and/or ACLs.
+    os.umask(0o077)
+
     if not args.quiet:
-        formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] %(message)s',
+        std_format = logging.Formatter(
+            '[%(backup_config)s] %(asctime)s [%(levelname)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S')
-        no_format = logging.Formatter('%(message)s')
+        no_format = logging.Formatter('[%(backup_config)s] %(message)s')
 
         ch = logging.StreamHandler()
-        ch.setFormatter(formatter)
+        ch.setFormatter(std_format)
         LOG.addHandler(ch)
 
         ch_clean = logging.StreamHandler()
         ch_clean.setFormatter(no_format)
         LOG_CLEAN.addHandler(ch_clean)
-
-    # Restrict permissions to the current user for all files created
-    # by this script. This will not affect the backup itself if rsync is 
-    # configured to sync permissions and/or ACLs.
-    os.umask(0o077)
 
     if not args.config_name:
         workers = 2

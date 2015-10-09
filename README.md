@@ -73,3 +73,16 @@ Dry run backup:
 Additional features:
 
     ./backup.py --help 
+
+### Note about parallel backups
+By default rsync-backup is doing 2 backups in parallel when not specifying a
+specific backup to prevent a single slow log running backup from blocking all
+the other backups from running. The number of parallel processes can be
+configured with the `-p N` argument. Parallel runs will cause the log output
+from the different backups to interleave with each other as they are printed
+to the screen. If this is not acceptable you can disable the parallelization
+by setting `-p 1`, effectively making rsync-backup process the backups
+sequentially.
+
+The file based logs are not affected by the parallelization, as they are
+written individually per backup.
