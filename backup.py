@@ -746,6 +746,7 @@ def init_backup(config_name, test, verify):
     except KeyboardInterrupt:
         backup.status = 'Backup aborted by user!'
         LOG.error(backup.status, extra=log_params)
+        raise
     except BackupException as e:
         LOG.error(str(e), extra=log_params)
     finally:
@@ -803,13 +804,11 @@ def main():
         LOG_CLEAN.addHandler(ch_clean)
 
     if not args.config_name:
-        workers = 2
-        if args.processes:
-            workers = args.processes
+        workers = args.processes if args.processes else 2
 
         with ProcessPoolExecutor(max_workers=workers) as executor:
             for conf in get_all_configs():
-                p = executor.submit(init_backup, conf, args.test, args.verify)
+                executor.submit(init_backup, conf, args.test, args.verify)
     else:
         init_backup(args.config_name, args.test, args.verify)
 
