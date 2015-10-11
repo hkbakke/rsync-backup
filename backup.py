@@ -32,10 +32,10 @@ class Backup(object):
 
         # Ensure stuff needed for the destructor are defined first in case
         # something breaks during initialization
+        self.error = True
         self.log_params = log_params
         self.status = 'Backup failed!'
         self.pid_created = False
-        self.error = True
 
         # Load the global configuration file
         configfile_global = os.path.join(
