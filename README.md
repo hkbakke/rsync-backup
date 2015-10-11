@@ -57,7 +57,7 @@ explanations.
 ### Manual run
 Run all configured backups:
 
-    ./backup.py
+    ./backup.py -a
 Run a specific backup configuration:
 
     ./backup.py -c <config>

@@ -779,22 +779,25 @@ def main():
     # Get script arguments
     parser = argparse.ArgumentParser(
         description='Rsync based backup with checksumming and reporting.')
-    parser.add_argument(
-        '-c', '--config-name', metavar='NAME',
-        help='Select specific backup configuration.')
-    parser.add_argument(
-        '-q', '--quiet', help='Suppress output from script.',
-        action='store_true')
-    parser.add_argument(
-        '-i', '--verify', metavar='BACKUP', nargs='?', const='_current_',
-        help='Verify the integrity of the selected backup. If no BACKUP is '
-            'given the current backup is selected.')
-    parser.add_argument(
-        '-t', '--test', help='Dry run backup. Only logs will be written.',
-        action='store_true')
-    parser.add_argument(
-        '-p', '--processes', metavar='N', type=int,
-        help='Number of backups to run in parallel.')
+
+    me_group = parser.add_mutually_exclusive_group(required=True)
+    me_group.add_argument('-a', '--all-configs',
+                          help='Run all configured backups in parallel.',
+                          action='store_true')
+    me_group.add_argument('-c', '--config-name', metavar='NAME',
+                          help='Select specific backup configuration.')
+    parser.add_argument('-p', '--processes', metavar='N', type=int,
+                        help='Number of backups to run in parallel.')
+    parser.add_argument('-q', '--quiet', help='Suppress output from script.',
+                        action='store_true')
+    parser.add_argument('-i', '--verify', metavar='BACKUP', nargs='?',
+                        const='_current_',
+                        help='Verify the integrity of the selected backup. If '
+                             'no BACKUP is given the current backup is '
+                             'selected.')
+    parser.add_argument('-t', '--test',
+                        help='Dry run backup. Only logs will be written.',
+                        action='store_true')
     args = parser.parse_args()
 
     if not args.quiet:
@@ -812,13 +815,13 @@ def main():
         LOG_CLEAN.addHandler(ch_clean)
 
     try:
-        if not args.config_name:
+        if args.all_configs:
             workers = args.processes if args.processes else 2
 
             with ProcessPoolExecutor(max_workers=workers) as executor:
                 for conf in get_all_configs():
                     executor.submit(init_backup, conf, args.test, args.verify)
-        else:
+        elif args.config_name:
             init_backup(args.config_name, args.test, args.verify)
     except KeyboardInterrupt:
         sys.exit(1)
