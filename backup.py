@@ -72,8 +72,8 @@ class Backup(object):
         self.last_verification_file = os.path.join(
             self.cache_dir, 'last_verification')
         self.checksum_filename = 'checksums.md5'
-        self.umask = self.global_config.get('general', 'umask',
-                                            fallback='0o077')
+        self.umask = int(self.global_config.get('general', 'umask',
+                                                   fallback='0o077'), 8)
         os.umask(self.umask)
 
         # Configure backup intervals
