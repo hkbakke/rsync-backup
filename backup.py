@@ -755,7 +755,7 @@ def init_backup(config_name, test, verify):
         LOG.error(backup.status, extra=log_params)
         raise
     except Exception as e:
-        LOG.error(e, extra=log_params)
+        LOG.error(e, exc_info=True, extra=log_params)
         raise
     finally:
         backup.report_status()
@@ -806,14 +806,18 @@ def main():
         ch_clean.setFormatter(no_format)
         LOG_CLEAN.addHandler(ch_clean)
 
-    if not args.config_name:
-        workers = args.processes if args.processes else 2
+    try:
+        if not args.config_name:
+            workers = args.processes if args.processes else 2
 
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            for conf in get_all_configs():
-                executor.submit(init_backup, conf, args.test, args.verify)
-    else:
-        init_backup(args.config_name, args.test, args.verify)
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                for conf in get_all_configs():
+                    executor.submit(init_backup, conf, args.test, args.verify)
+        else:
+            init_backup(args.config_name, args.test, args.verify)
+    except KeyboardInterrupt:
+        sys.exit(1)
+
 
 if __name__ == '__main__':
     main()
