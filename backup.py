@@ -819,6 +819,7 @@ def main():
 
         with futures.ProcessPoolExecutor(max_workers=workers) as executor:
             pending = []
+
             try:
                 pending = [
                     executor.submit(init_backup, conf, args.test, args.verify) 
