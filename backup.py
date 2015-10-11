@@ -35,6 +35,7 @@ class Backup(object):
         self.log_params = log_params
         self.status = 'Backup failed!'
         self.pid_created = False
+        self.error = True
 
         # Load the global configuration file
         configfile_global = os.path.join(
@@ -261,10 +262,11 @@ class Backup(object):
         LOG_CLEAN.addHandler(fh_clean)
 
     def schedule_verification(self):
-        interval = self.config.getint(
-            'general', 'verification_interval',
-            fallback=self.global_config.getint(
-                'general', 'verification_interval'))
+        self.error = True
+
+        interval = self.config.getint('general', 'verification_interval',
+                                      fallback=self.global_config.getint(
+                                          'general', 'verification_interval'))
         if interval == 0:
             LOG.warning('Automatic backup verification is disabled. '
                         'This is NOT recommended!', extra=self.log_params)
@@ -282,6 +284,8 @@ class Backup(object):
                      'verified. Initializing verification...', interval,
                      extra=self.log_params)
             self.verify()
+
+        self.error = False
 
     def _validate_checksum_file(self, checksum_file, backup_dir):
         if not os.path.isfile(checksum_file):
@@ -308,9 +312,11 @@ class Backup(object):
         return True
 
     def verify(self, backup='_current_'):
+        self.status = 'Backup verification failed!'
+        self.error = True
+
         LOG.info('Initializing checksum verification for %s',
                  self.backup_root, extra=self.log_params)
-        self.status = 'Backup verification failed!'
 
         if backup == '_current_':
             backup_dir = self._get_latest_backup()
@@ -366,6 +372,8 @@ class Backup(object):
 
         if backup == '_current_':
             self._write_timestamp(self.last_verification_file)
+
+        self.error = False
 
     def _display_verification_stats(self, stats):
         label_width = 26
@@ -429,6 +437,8 @@ class Backup(object):
 
     def backup(self):
         self.status = 'Backup failed!'
+        self.error = True
+
         dest_dir = os.path.join(
             self.backup_root, 'incomplete_%s' % self.timestamp, 'backup')
         rsync_command = self._configure_rsync(dest_dir)
@@ -462,6 +472,7 @@ class Backup(object):
             self.status = 'Backup completed successfully!'
 
         LOG.info(self.status, extra=self.log_params)
+        self.error = False
 
     def _create_interval_backups(self, current_backup):
         for interval in self.intervals:
@@ -700,7 +711,7 @@ Summary
             msg.as_string())
         sender.quit()
 
-    def report_status(self, success):
+    def report_status(self):
         if self.to_addrs == set(['']):
             LOG.info('Mail reporting is disabled. Set "to_addrs" in the '
                      'configuration file to enable', extra=self.log_params)
@@ -712,7 +723,7 @@ Summary
             'reporting', 'report_interval',
             fallback=self.global_config.getint('reporting', 'report_interval'))
 
-        if not success:
+        if self.error:
             self._send_mail(
                 self.status, [(self.status, self.log_file)])
         elif not last_report:
@@ -733,7 +744,6 @@ def init_backup(config_name, test, verify):
     }
 
     backup = Backup(config_name, test, log_params)
-    success = False
 
     try:
         if verify:
@@ -741,8 +751,6 @@ def init_backup(config_name, test, verify):
         else:
             backup.backup()
             backup.schedule_verification()
-
-        success = True
     except KeyboardInterrupt:
         backup.status = 'Backup aborted by user!'
         LOG.error(backup.status, extra=log_params)
@@ -750,7 +758,7 @@ def init_backup(config_name, test, verify):
     except BackupException as e:
         LOG.error(str(e), extra=log_params)
     finally:
-        backup.report_status(success)
+        backup.report_status()
 
 
 def get_all_configs():
