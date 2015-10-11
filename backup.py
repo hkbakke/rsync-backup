@@ -163,8 +163,13 @@ class Backup(object):
 
     @staticmethod
     def _create_dir(directory):
-        if not os.path.exists(directory):
+        # Use try/except to avoid a race condition between the check for an 
+        # existing directory and the creation of a new one when multiple
+        # backups running in parallel creates shared directories.
+        try:
             os.makedirs(directory)
+        except FileExistsError:
+            pass
 
     @staticmethod
     def _get_timestamp(file_path):
