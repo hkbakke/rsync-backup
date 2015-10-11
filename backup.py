@@ -14,7 +14,7 @@ from shutil import rmtree, copytree, move
 import smtplib
 from email.mime.text import MIMEText
 from functools import partial
-from concurrent.futures import ProcessPoolExecutor
+from concurrent import futures
 
 
 LOG = logging.getLogger('log')
@@ -814,17 +814,30 @@ def main():
         ch_clean.setFormatter(no_format)
         LOG_CLEAN.addHandler(ch_clean)
 
-    try:
-        if args.all_configs:
-            workers = args.processes if args.processes else 2
+    if args.all_configs:
+        workers = args.processes if args.processes else 2
 
-            with ProcessPoolExecutor(max_workers=workers) as executor:
-                for conf in get_all_configs():
-                    executor.submit(init_backup, conf, args.test, args.verify)
-        elif args.config_name:
+        with futures.ProcessPoolExecutor(max_workers=workers) as executor:
+            pending = []
+            try:
+                pending = [
+                    executor.submit(init_backup, conf, args.test, args.verify) 
+                    for conf in get_all_configs()]
+
+                # Remove finished futures to be able to cancel the pending 
+                # futures if the pool processing is interrupted before 
+                # completion.
+                for future in futures.as_completed(pending):
+                    pending.remove(future)
+            except KeyboardInterrupt:
+                for future in pending:
+                    future.cancel()
+                sys.exit()
+    elif args.config_name:
+        try:
             init_backup(args.config_name, args.test, args.verify)
-    except KeyboardInterrupt:
-        sys.exit(1)
+        except KeyboardInterrupt:
+            sys.exit()
 
 
 if __name__ == '__main__':
