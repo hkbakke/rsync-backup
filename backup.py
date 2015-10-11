@@ -37,17 +37,17 @@ class Backup(object):
         self.status = 'Backup failed!'
         self.pid_created = False
 
+        script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+
         # Load the global configuration file
-        configfile_global = os.path.join(
-            os.path.dirname(os.path.abspath(sys.argv[0])), 'rsync-backup.conf')
+        configfile_global = os.path.join(script_dir, 'rsync-backup.conf')
         self.global_config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
         self.global_config.read_file(open(configfile_global))
 
         # Load the backup configuration file
-        configfile_backup = os.path.join(
-            os.path.dirname(os.path.abspath(sys.argv[0])), 'conf.d',
-            '%s.conf' % config_name)
+        configfile_backup = os.path.join(script_dir, 'conf.d',
+                                         '%s.conf' % config_name)
         self.config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
         self.config.read_file(open(configfile_backup))
@@ -73,7 +73,7 @@ class Backup(object):
             self.cache_dir, 'last_verification')
         self.checksum_filename = 'checksums.md5'
         self.umask = int(self.global_config.get('general', 'umask',
-                                                   fallback='0o077'), 8)
+                                                fallback='0o077'), 8)
         os.umask(self.umask)
 
         # Configure backup intervals
@@ -171,8 +171,8 @@ class Backup(object):
         timestamp_datetime = None
         try:
             with open(file_path, 'r') as f:
-                timestamp_datetime = datetime.strptime(
-                    f.readline().strip(), '%Y-%m-%d %H:%M:%S')
+                timestamp_datetime = datetime.strptime(f.readline().strip(),
+                                                       '%Y-%m-%d %H:%M:%S')
         except IOError:
             pass
         except ValueError:
@@ -181,9 +181,8 @@ class Backup(object):
 
     def _run_rsync(self, rsync_command):
         checksums = list()
-        p = subprocess.Popen(
-            rsync_command, shell=False, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT)
+        p = subprocess.Popen(rsync_command, shell=False,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         while p.poll() is None:
             for line in iter(p.stdout.readline, b''):
@@ -739,13 +738,13 @@ Summary
 
 
 def init_backup(config_name, test, verify):
-    log_params = {
-        'backup_config': config_name,
-    }
-
-    backup = Backup(config_name, test, log_params)
-
     try:
+        log_params = {
+            'backup_config': config_name,
+        }
+
+        backup = Backup(config_name, test, log_params)
+
         if verify:
             backup.verify(verify)
         else:
@@ -755,15 +754,16 @@ def init_backup(config_name, test, verify):
         backup.status = 'Backup aborted by user!'
         LOG.error(backup.status, extra=log_params)
         raise
-    except BackupException as e:
-        LOG.error(str(e), extra=log_params)
+    except Exception as e:
+        LOG.error(e, extra=log_params)
+        raise
     finally:
         backup.report_status()
 
 
 def get_all_configs():
-    conf_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),
-                            'conf.d')             
+    script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    conf_dir = os.path.join(script_dir, 'conf.d')             
 
     for conf in os.listdir(conf_dir):
         if fnmatch.fnmatch(conf, '*.conf'):
