@@ -55,7 +55,6 @@ class Backup(object):
         self.test = test
         current_datetime = datetime.now()
 
-        self.log_params['backup_label'] = self.config.get('general', 'label')
         self.rules = configfile_backup.replace('.conf', '.rules')
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
         self.backup_root = os.path.join(
@@ -740,7 +739,6 @@ Summary
 def init_backup(config_name, test, verify):
     log_params = {
         'backup_config': config_name,
-        'backup_label': '-'
     }
 
     backup = Backup(config_name, test, log_params)
