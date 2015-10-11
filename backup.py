@@ -54,7 +54,6 @@ class Backup(object):
 
         self.test = test
         current_datetime = datetime.now()
-
         self.rules = configfile_backup.replace('.conf', '.rules')
         self.timestamp = current_datetime.strftime('%Y-%m-%d-%H%M%S')
         self.backup_root = os.path.join(
@@ -73,6 +72,9 @@ class Backup(object):
         self.last_verification_file = os.path.join(
             self.cache_dir, 'last_verification')
         self.checksum_filename = 'checksums.md5'
+        self.umask = self.global_config.get('general', 'umask',
+                                            fallback='0o077')
+        os.umask(self.umask)
 
         # Configure backup intervals
         self.intervals = {
@@ -789,11 +791,6 @@ def main():
         '-p', '--processes', metavar='N', type=int,
         help='Number of backups to run in parallel.')
     args = parser.parse_args()
-
-    # Restrict permissions to the current user for all files created
-    # by this script. This will not affect the backup itself if rsync is 
-    # configured to sync permissions and/or ACLs.
-    os.umask(0o077)
 
     if not args.quiet:
         std_format = logging.Formatter(
