@@ -709,12 +709,10 @@ Summary
         msg['From'] = self.global_config.get('reporting', 'from_addr')
         msg['To'] = ','.join(addr for addr in self.to_addrs)
 
-        sender = smtplib.SMTP(
-            self.global_config.get('reporting', 'smtp_server'))
-        sender.sendmail(
-            self.global_config.get('reporting', 'from_addr'), self.to_addrs,
-            msg.as_string())
-        sender.quit()
+        with smtplib.SMTP(
+                self.global_config.get('reporting', 'smtp_server')) as sender:
+            sender.sendmail(self.global_config.get('reporting', 'from_addr'),
+                            self.to_addrs, msg.as_string())
 
     def report_status(self):
         if self.to_addrs == set(['']):
