@@ -28,15 +28,13 @@ class BackupException(Exception):
 
 
 class Backup(object):
-    def __init__(self, config_name, test=False, log_params={}):
-
-        # Ensure stuff needed for the destructor are defined first in case
-        # something breaks during initialization
+    def __init__(self, config_name, test=False):
         self.error = True
-        self.log_params = log_params
         self.status = 'Backup failed!'
         self.pid_created = False
-
+        self.log_params = {
+            'backup_config': config_name
+        }
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 
         # Load the global configuration file
@@ -106,7 +104,20 @@ class Backup(object):
         self._create_dirs()
         self._prepare_logging()
 
-    def __del__(self):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is KeyboardInterrupt:
+            self.status = 'Backup aborted!'
+            LOG.error(self.status, extra=self.log_params)
+        elif exc_type is not None:
+            LOG.error(exc_value, extra=self.log_params)
+
+        self.cleanup()
+
+    def cleanup(self):
+        self.report_status()
         LOG_CLEAN.info('END STATUS: %s', self.status, extra=self.log_params)
 
         if self.pid_created:
@@ -741,27 +752,12 @@ Summary
 
 
 def init_backup(config_name, test, verify):
-    try:
-        log_params = {
-            'backup_config': config_name,
-        }
-
-        backup = Backup(config_name, test, log_params)
-
+    with Backup(config_name, test) as backup:
         if verify:
             backup.verify(verify)
         else:
             backup.backup()
             backup.schedule_verification()
-    except KeyboardInterrupt:
-        backup.status = 'Backup aborted by user!'
-        LOG.error(backup.status, extra=log_params)
-        raise
-    except Exception as e:
-        LOG.error(e, exc_info=True, extra=log_params)
-        raise
-    finally:
-        backup.report_status()
 
 
 def get_all_configs():
