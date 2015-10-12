@@ -15,6 +15,7 @@ import smtplib
 from email.mime.text import MIMEText
 from functools import partial
 from multiprocessing import Pool
+import signal
 
 
 LOG = logging.getLogger('log')
@@ -752,12 +753,17 @@ Summary
 
 
 def init_backup(config_name, test, verify):
-    with Backup(config_name, test) as backup:
-        if verify:
-            backup.verify(verify)
-        else:
-            backup.backup()
-            backup.schedule_verification()
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
+    try:
+        with Backup(config_name, test) as backup:
+            if verify:
+                backup.verify(verify)
+            else:
+                backup.backup()
+                backup.schedule_verification()
+    except KeyboardInterrupt:
+        sys.exit(2)
 
 
 def get_all_configs():
@@ -770,7 +776,6 @@ def get_all_configs():
 
 
 def main():
-    # Get script arguments
     parser = argparse.ArgumentParser(
         description='Rsync based backup with checksumming and reporting.')
 
@@ -808,23 +813,20 @@ def main():
         ch_clean.setFormatter(no_format)
         LOG_CLEAN.addHandler(ch_clean)
 
-    if args.all_configs:
-        workers = args.processes if args.processes else 2
+        if args.all_configs:
+            workers = args.processes if args.processes else 2
 
-        with Pool(processes=workers) as pool:
             try:
-                for conf in get_all_configs():
-                    pool.apply_async(init_backup,
-                                     args=(conf, args.test, args.verify))
-                pool.close()
-                pool.join()
+                with Pool(processes=workers) as pool:
+                    for conf in get_all_configs():
+                        pool.apply_async(init_backup,
+                                         args=(conf, args.test, args.verify))
+                    pool.close()
+                    pool.join()
             except KeyboardInterrupt:
-                pass
-    elif args.config_name:
-        try:
+                sys.exit(2)
+        elif args.config_name:
             init_backup(args.config_name, args.test, args.verify)
-        except KeyboardInterrupt:
-            sys.exit()
 
 
 if __name__ == '__main__':
