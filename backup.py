@@ -763,6 +763,9 @@ def init_backup(config_name, test, verify):
         LOG.error(e, exc_info=True, extra=log_params)
         raise
     finally:
+        print('Running finally before sleep')
+        sleep(5)
+        print('Running finally after sleep')
         backup.report_status()
 
 
