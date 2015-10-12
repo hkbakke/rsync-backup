@@ -29,16 +29,12 @@ class BackupException(Exception):
 
 class Backup(object):
     def __init__(self, config_name, test=False):
-
-        # Ensure stuff needed for the destructor are defined first in case
-        # something breaks during initialization
         self.error = True
+        self.status = 'Backup failed!'
+        self.pid_created = False
         self.log_params = {
             'backup_config': config_name
         }
-        self.status = 'Backup failed!'
-        self.pid_created = False
-
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
 
         # Load the global configuration file
@@ -113,7 +109,7 @@ class Backup(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is KeyboardInterrupt:
-            self.status = 'Backup aborted by user!'
+            self.status = 'Backup aborted!'
             LOG.error(self.status, extra=self.log_params)
         elif exc_type is not None:
             LOG.error(exc_value, extra=self.log_params)
