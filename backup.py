@@ -819,8 +819,7 @@ def main():
                 pool.close()
                 pool.join()
             except KeyboardInterrupt:
-                pool.terminate()
-                pool.join()
+                pass
     elif args.config_name:
         try:
             init_backup(args.config_name, args.test, args.verify)
