@@ -813,20 +813,20 @@ def main():
         ch_clean.setFormatter(no_format)
         LOG_CLEAN.addHandler(ch_clean)
 
-        if args.all_configs:
-            workers = args.processes if args.processes else 2
+    if args.all_configs:
+        workers = args.processes if args.processes else 2
 
-            try:
-                with Pool(processes=workers) as pool:
-                    for conf in get_all_configs():
-                        pool.apply_async(init_backup,
-                                         args=(conf, args.test, args.verify))
-                    pool.close()
-                    pool.join()
-            except KeyboardInterrupt:
-                sys.exit(2)
-        elif args.config_name:
-            init_backup(args.config_name, args.test, args.verify)
+        try:
+            with Pool(processes=workers) as pool:
+                for conf in get_all_configs():
+                    pool.apply_async(init_backup,
+                                     args=(conf, args.test, args.verify))
+                pool.close()
+                pool.join()
+        except KeyboardInterrupt:
+            sys.exit(2)
+    elif args.config_name:
+        init_backup(args.config_name, args.test, args.verify)
 
 
 if __name__ == '__main__':
