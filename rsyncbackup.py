@@ -20,6 +20,8 @@ class BackupException(Exception):
 class Backup(object):
     def __init__(self, config_name, test=False):
         self.logger = logging.getLogger('%s.%s' % (__name__, config_name))
+        self.logger.setLevel(logging.DEBUG)
+
         self.error = True
         self.status = 'Backup failed!'
         self.pid_created = False

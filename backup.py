@@ -10,7 +10,6 @@ import signal
 import rsyncbackup
 
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
 
 
 def init_backup(config_name, test, verify):
@@ -44,7 +43,7 @@ def main():
     me_group.add_argument('-a', '--backup-all',
                           help='Run all configured backups.',
                           action='store_true')
-    me_group.add_argument('-c', '--config-name', metavar='NAME',
+    me_group.add_argument('-c', '--config-name',
                           help='Select specific backup configuration.')
     parser.add_argument('-p', '--processes', metavar='N', type=int,
                         help='Number of backups to run in parallel.')
@@ -58,6 +57,16 @@ def main():
     parser.add_argument('-t', '--test',
                         help='Dry run backup. Only logs will be written.',
                         action='store_true')
+    parser.add_argument('-l', '--log-level',
+                        choices=[
+                            'CRITICAL',
+                            'ERROR',
+                            'WARNING',
+                            'INFO',
+                            'DEBUG'
+                        ],
+                        default='DEBUG',
+                        help='Set log level for console output.')
     args = parser.parse_args()
 
     if not args.quiet:
@@ -65,6 +74,7 @@ def main():
 
         ch = logging.StreamHandler()
         ch.setFormatter(std_format)
+        ch.setLevel(args.log_level)
         logger.addHandler(ch)
 
     if args.backup_all:
