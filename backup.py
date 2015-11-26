@@ -41,7 +41,7 @@ def main():
         description='Rsync based backup with checksumming and reporting.')
 
     me_group = parser.add_mutually_exclusive_group(required=True)
-    me_group.add_argument('-a', '--all',
+    me_group.add_argument('-a', '--backup-all',
                           help='Run all configured backups.',
                           action='store_true')
     me_group.add_argument('-c', '--config-name', metavar='NAME',
@@ -70,7 +70,7 @@ def main():
         ch.setFormatter(std_format)
         logger.addHandler(ch)
 
-    if args.all_configs:
+    if args.backup_all:
         workers = args.processes if args.processes else 2
 
         try:
