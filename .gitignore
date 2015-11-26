@@ -2,3 +2,4 @@
 /conf.d/*.conf
 /conf.d/*.rules
 /rsync-backup.conf
+/__pycache__/
