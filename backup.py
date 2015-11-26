@@ -41,8 +41,8 @@ def main():
         description='Rsync based backup with checksumming and reporting.')
 
     me_group = parser.add_mutually_exclusive_group(required=True)
-    me_group.add_argument('-a', '--all-configs',
-                          help='Run all configured backups in parallel.',
+    me_group.add_argument('-a', '--all',
+                          help='Run all configured backups.',
                           action='store_true')
     me_group.add_argument('-c', '--config-name', metavar='NAME',
                           help='Select specific backup configuration.')
