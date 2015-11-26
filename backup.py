@@ -9,7 +9,7 @@ from multiprocessing import Pool
 import signal
 import rsyncbackup
 
-logger = logging.getLogger('rsyncbackup')
+logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
@@ -61,10 +61,7 @@ def main():
     args = parser.parse_args()
 
     if not args.quiet:
-        std_format = logging.Formatter(
-            '[%(backup_config)s] %(asctime)s [%(levelname)s] %(message)s',
-            datefmt='%Y-%m-%dT%H:%M:%S%z')
-        no_format = logging.Formatter('[%(backup_config)s] %(message)s')
+        std_format = logging.Formatter('[%(name)s] [%(levelname)s] %(message)s')
 
         ch = logging.StreamHandler()
         ch.setFormatter(std_format)
