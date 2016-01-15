@@ -6,6 +6,7 @@ import sys
 import hashlib
 import subprocess
 import re
+import stat
 from datetime import datetime
 from shutil import rmtree, copytree, move
 import smtplib
@@ -118,7 +119,13 @@ class Backup(object):
         for root, _, filenames in os.walk(path):
             for filename in filenames:
                 file_path = os.path.join(root, filename)
-                if os.path.isfile(file_path) and not os.path.islink(file_path):
+
+                try:
+                    mode = os.stat(file_path, follow_symlinks=False).st_mode
+                except OSError:
+                    continue
+
+                if stat.S_ISREG(mode) and not stat.S_ISLNK(mode):
                     yield file_path
 
     @staticmethod
@@ -491,7 +498,8 @@ class Backup(object):
         backup_dir = bytes(backup_dir, 'utf8')
         current_files = {
             filename.replace(backup_dir, b'.', 1)
-            for filename in self._get_files_recursive(backup_dir)}
+            for filename in self._get_files_recursive(backup_dir)
+        }
 
         checksums = rsync_checksums
         previous_checksum_file = None
