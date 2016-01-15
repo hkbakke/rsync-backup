@@ -526,13 +526,17 @@ class Backup(object):
             {checksum[0] for checksum in checksums})
         self.logger.info('Calculating checksum for %d additional files',
                          len(need_checksum))
+
         for filename in need_checksum:
-            filename_path = os.path.join(backup_dir, filename)
-            if os.path.islink(filename_path):
+            file_path = os.path.join(backup_dir, filename)
+
+            try:
+                mode = os.stat(file_path, follow_symlinks=False).st_mode
+            except OSError:
                 continue
 
-            if os.path.isfile(filename_path):
-                checksum = self._get_file_md5(filename_path)
+            if stat.S_ISREG(mode) and not stat.S_ISLNK(mode):
+                checksum = self._get_file_md5(file_path)
                 checksums.append([filename, checksum])
 
         return checksums
@@ -595,6 +599,7 @@ class Backup(object):
                 'backup')
         except IndexError:
             backup = None
+
         return backup
 
     def _get_backup_dir(self, backup):
