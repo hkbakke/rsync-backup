@@ -449,8 +449,8 @@ class Backup(object):
         rsync_checksums = self._run_rsync(rsync_command)
 
         checksums = self._get_checksums(dest_dir, rsync_checksums)
-        checksum_file = os.path.join(
-        os.path.dirname(dest_dir), self.checksum_filename)
+        checksum_file = os.path.join(os.path.dirname(dest_dir),
+                                     self.checksum_filename)
         self._write_checksum_file(checksum_file, checksums)
 
         # Rename incomplete backup to current and enforce retention
@@ -534,7 +534,7 @@ class Backup(object):
     def _get_checksums(self, backup_dir, rsync_checksums):
         backup_dir = bytes(backup_dir, 'utf8')
         current_files = {
-            re.sub(re.escape(backup_dir), b'.', filename, 1)
+            filename.replace(backup_dir, b'.', 1)
             for filename in self._get_files_recursive(backup_dir)}
 
         checksums = rsync_checksums
