@@ -144,25 +144,6 @@ class Backup(object):
         return bytes(md5.hexdigest(), 'utf8')
 
     @staticmethod
-    def _get_line_count(filename, unique=False):
-        with open(filename, 'rb') as f:
-            if unique:
-                linecount = len(set(f.readlines()))
-            else:
-                linecount = len(f.readlines())
-        return linecount
-
-    @staticmethod
-    def _get_file_count_recursive(path):
-        count = 0
-        for root, _, filenames in os.walk(path):
-            for filename in filenames:
-                file_path = os.path.join(root, filename)
-                if os.path.isfile(file_path) and not os.path.islink(file_path):
-                    count += 1
-        return count
-
-    @staticmethod
     def _create_dir(directory):
         # Use try/except to avoid a race condition between the check for an 
         # existing directory and the creation of a new one when multiple
@@ -288,30 +269,6 @@ class Backup(object):
 
         self.error = False
 
-    def _validate_checksum_file(self, checksum_file, backup_dir):
-        if not os.path.isfile(checksum_file):
-            raise BackupException('The file %s does not exist' % checksum_file)
-
-        checksum_file_unique_files = self._get_line_count(checksum_file, True)
-        checksum_file_files = self._get_line_count(checksum_file)
-        backup_file_count = self._get_file_count_recursive(backup_dir)
-
-        if checksum_file_unique_files != checksum_file_files:
-            raise BackupException(
-                'There are %d lines in %s, but only %d are unique. '
-                'These counts should be equal.' % (
-                    checksum_file_files, checksum_file,
-                    checksum_file_unique_files))
-
-        if checksum_file_unique_files != backup_file_count:
-            raise BackupException(
-                'There are %d lines in %s, while there are %d files in %s. '
-                'These counts should be equal.' % (
-                    checksum_file_unique_files, checksum_file,
-                    backup_file_count, backup_dir))
-
-        return True
-
     def verify(self, backup='_current_'):
         self.status = 'Backup verification failed!'
         self.error = True
@@ -333,7 +290,6 @@ class Backup(object):
                 'There is no checksum file to verify for this backup')
 
         self.logger.info('Selected checksum file: %s', checksum_file)
-        self._validate_checksum_file(checksum_file, backup_dir)
         self.logger.info('Starting backup verification...')
         checked_count = 0
         verified_count = 0
