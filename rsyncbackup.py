@@ -417,8 +417,8 @@ class Backup(object):
         self._write_checksum_file(checksum_file, checksums)
 
         # Rename incomplete backup to current and enforce retention
-        current_backup = os.path.join(
-            self.backup_root, 'current_%s' % self.timestamp)
+        current_backup = os.path.join(self.backup_root,
+                                      'current_%s' % self.timestamp)
 
         if not self.test:
             move(os.path.dirname(dest_dir), current_backup)
