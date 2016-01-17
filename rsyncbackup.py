@@ -115,17 +115,23 @@ class Backup(object):
             os.remove(self.pidfile)
 
     @staticmethod
-    def _get_files_recursive(path):
+    def _is_file(path):
+        try:
+            mode = os.stat(path, follow_symlinks=False).st_mode
+        except OSError:
+            return False
+
+        if stat.S_ISREG(mode) and not stat.S_ISLNK(mode):
+            return True
+
+        return False
+
+    def _get_files_recursive(self, path):
         for root, _, filenames in os.walk(path):
             for filename in filenames:
                 file_path = os.path.join(root, filename)
 
-                try:
-                    mode = os.stat(file_path, follow_symlinks=False).st_mode
-                except OSError:
-                    continue
-
-                if stat.S_ISREG(mode) and not stat.S_ISLNK(mode):
+                if self._is_file(file_path):
                     yield file_path
 
     @staticmethod
@@ -530,12 +536,7 @@ class Backup(object):
         for filename in need_checksum:
             file_path = os.path.join(backup_dir, filename)
 
-            try:
-                mode = os.stat(file_path, follow_symlinks=False).st_mode
-            except OSError:
-                continue
-
-            if stat.S_ISREG(mode) and not stat.S_ISLNK(mode):
+            if self._is_file(file_path):
                 checksum = self._get_file_md5(file_path)
                 checksums.append([filename, checksum])
 
