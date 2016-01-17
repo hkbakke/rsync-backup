@@ -126,13 +126,19 @@ class Backup(object):
 
         return False
 
-    def _get_files_recursive(self, path):
+    def _get_files(self, path, relative=False):
+        path_prefix_len = len(path) + 1
+
         for root, _, filenames in os.walk(path):
             for filename in filenames:
                 file_path = os.path.join(root, filename)
 
                 if self._is_file(file_path):
-                    yield file_path
+                    if relative:
+                        # This is much faster than os.path.relpath
+                        yield file_path[path_prefix_len:]
+                    else: 
+                        yield file_path
 
     @staticmethod
     def _parse_checksum_file(checksum_file):
@@ -140,7 +146,12 @@ class Backup(object):
             for line in f:
                 checksum, filename = line.split(None, 1)
                 filename = filename.strip()
-                yield checksum, filename
+
+                # Remove this check when all checksum files are migrated
+                if filename.startswith(b'./'):
+                    yield checksum, filename[len(b'./'):]
+                else:
+                    yield checksum, filename
 
     @staticmethod
     def _get_file_md5(filename):
@@ -194,7 +205,7 @@ class Backup(object):
                 if re.match(b'^>', line):
                     rsync_update_info = line.split(b' ', 2)
                     file_checksum = rsync_update_info[1]
-                    file_path = b'./' + rsync_update_info[2]
+                    file_path = rsync_update_info[2]
                     checksums.append((file_path, file_checksum))
 
         exit_code = p.returncode
@@ -511,8 +522,8 @@ class Backup(object):
             previous_checksum_file = self._get_checksum_file(latest_backup)
 
         current_files = {
-            filename.replace(backup_dir, b'.', 1)
-            for filename in self._get_files_recursive(backup_dir)
+            filename for filename in
+            self._get_files(backup_dir, relative=True)
         }
 
         if previous_checksum_file:
