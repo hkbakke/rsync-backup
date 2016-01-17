@@ -195,7 +195,7 @@ class Backup(object):
                     rsync_update_info = line.split(b' ', 2)
                     file_checksum = rsync_update_info[1]
                     file_path = b'./' + rsync_update_info[2]
-                    checksums.append([file_path, file_checksum])
+                    checksums.append((file_path, file_checksum))
 
         exit_code = p.returncode
         if exit_code != 0:
@@ -502,17 +502,18 @@ class Backup(object):
 
     def _get_checksums(self, backup_dir, rsync_checksums):
         backup_dir = bytes(backup_dir, 'utf8')
-        current_files = {
-            filename.replace(backup_dir, b'.', 1)
-            for filename in self._get_files_recursive(backup_dir)
-        }
-
-        checksums = rsync_checksums
+        checksums = list()
         previous_checksum_file = None
+        checksums.extend(rsync_checksums)
         latest_backup = self._get_latest_backup()
 
         if latest_backup:
             previous_checksum_file = self._get_checksum_file(latest_backup)
+
+        current_files = {
+            filename.replace(backup_dir, b'.', 1)
+            for filename in self._get_files_recursive(backup_dir)
+        }
 
         if previous_checksum_file:
             self.logger.info('Reusing unchanged checksums from %s',
@@ -523,7 +524,7 @@ class Backup(object):
             for file_checksum, file_path in self._parse_checksum_file(
                     previous_checksum_file):
                 if file_path in unchanged_files:
-                    checksums.append([file_path, file_checksum])
+                    checksums.append((file_path, file_checksum))
 
         # Add the rest of the files to the list of files that need their
         # checksums calculated. This is typically files previously
@@ -538,7 +539,7 @@ class Backup(object):
 
             if self._is_file(file_path):
                 checksum = self._get_file_md5(file_path)
-                checksums.append([filename, checksum])
+                checksums.append((filename, checksum))
 
         return checksums
 
