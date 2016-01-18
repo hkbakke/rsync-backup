@@ -7,6 +7,7 @@ import hashlib
 import subprocess
 import re
 import stat
+import gzip
 from datetime import datetime
 from shutil import rmtree, copytree, move
 import smtplib
@@ -60,7 +61,8 @@ class Backup(object):
             os.path.join(self.backup_root, 'cache'))
         self.last_verification_file = os.path.join(
             self.cache_dir, 'last_verification')
-        self.checksum_filename = 'checksums.md5'
+        self.checksum_file_legacy = 'checksums.md5'
+        self.checksum_file = 'checksums.gz'
         self.umask = int(self.global_config.get('general', 'umask',
                                                 fallback='0o077'), 8)
         os.umask(self.umask)
@@ -140,18 +142,25 @@ class Backup(object):
                     else: 
                         yield file_path
 
-    @staticmethod
-    def _parse_checksum_file(checksum_file):
-        with open(checksum_file, 'rb') as f:
-            for line in f:
-                checksum, filename = line.split(None, 1)
-                filename = filename.strip()
+    def _parse_checksum_file(self, checksum_file):
+        if os.path.basename(checksum_file) == self.checksum_file:
+            with gzip.open(checksum_file, 'rb') as f:
+                for line in f:
+                    checksum, filename = line.split(None, 1)
+                    filename = filename.strip()
 
-                # Remain compatible with old checksum files
-                if filename.startswith(b'./'):
-                    filename = filename[len(b'./'):]
+                    yield (filename, checksum)
+        elif os.path.basename(checksum_file) == self.checksum_file_legacy:
+            with open(checksum_file, 'rb') as f:
+                for line in f:
+                    checksum, filename = line.split(None, 1)
+                    filename = filename.strip()
 
-                yield (filename, checksum)
+                    # Remain compatible with old checksum files
+                    if filename.startswith(b'./'):
+                        filename = filename[len(b'./'):]
+
+                    yield (filename, checksum)
 
     @staticmethod
     def _get_file_md5(filename):
@@ -224,7 +233,7 @@ class Backup(object):
         self.logger.info('Adding %d md5 checksums to %s', len(checksums),
                          checksum_file)
 
-        with open(checksum_file, 'wb') as f:
+        with gzip.open(checksum_file, 'wb') as f:
             for filename, checksum in checksums:
                 f.write(checksum + b'  ' + filename + b'\n')
 
@@ -430,7 +439,7 @@ class Backup(object):
 
         checksums = self._get_checksums(bytes(dest_dir, 'utf8'), rsync_checksums)
         checksum_file = os.path.join(os.path.dirname(dest_dir),
-                                     self.checksum_filename)
+                                     self.checksum_file)
         self._write_checksum_file(checksum_file, checksums)
 
         # Rename incomplete backup to current and enforce retention
@@ -631,13 +640,18 @@ class Backup(object):
         return backup_dir
 
     def _get_checksum_file(self, backup):
+        filename = None
         checksum_file = os.path.join(
-            os.path.dirname(backup), self.checksum_filename)
+            os.path.dirname(backup), self.checksum_file)
+        checksum_file_legacy = os.path.join(
+            os.path.dirname(backup), self.checksum_file_legacy)
 
-        if not os.path.exists(checksum_file):
-            checksum_file = None
+        if os.path.exists(checksum_file):
+            filename = checksum_file
+        elif os.path.exists(checksum_file_legacy):
+            filename = checksum_file_legacy
 
-        return checksum_file
+        return filename
 
     def _send_mail(self, status, logs):
         summary = ''
