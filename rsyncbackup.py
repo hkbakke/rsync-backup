@@ -147,11 +147,11 @@ class Backup(object):
                 checksum, filename = line.split(None, 1)
                 filename = filename.strip()
 
-                # Remove this check when all checksum files are migrated
+                # Remain compatible with old checksum files
                 if filename.startswith(b'./'):
-                    yield checksum, filename[len(b'./'):]
-                else:
-                    yield checksum, filename
+                    filename = filename[len(b'./'):]
+
+                yield (filename, checksum)
 
     @staticmethod
     def _get_file_md5(filename):
@@ -320,7 +320,7 @@ class Backup(object):
         failed_count = 0
         failed_files = list()
 
-        for stored_checksum, filename in self._parse_checksum_file(
+        for filename, stored_checksum in self._parse_checksum_file(
                 checksum_file):
             file_path = os.path.normpath(
                 os.path.join(bytes(backup_dir, 'utf8'), filename))
@@ -428,7 +428,7 @@ class Backup(object):
                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
 
-        checksums = self._get_checksums(dest_dir, rsync_checksums)
+        checksums = self._get_checksums(bytes(dest_dir, 'utf8'), rsync_checksums)
         checksum_file = os.path.join(os.path.dirname(dest_dir),
                                      self.checksum_filename)
         self._write_checksum_file(checksum_file, checksums)
@@ -512,45 +512,48 @@ class Backup(object):
                     os.unlink(old_log)
 
     def _get_checksums(self, backup_dir, rsync_checksums):
-        backup_dir = bytes(backup_dir, 'utf8')
         checksums = list()
         previous_checksum_file = None
-        checksums.extend(rsync_checksums)
         latest_backup = self._get_latest_backup()
 
         if latest_backup:
             previous_checksum_file = self._get_checksum_file(latest_backup)
 
-        current_files = {
+        need_checksum = {
             filename for filename in
             self._get_files(backup_dir, relative=True)
         }
 
+        # Add rsync checksums to checksums and remove those files from 
+        # from the set of files needing checksum
+        checksums.extend(rsync_checksums)
+        need_checksum.difference_update(
+            {filename for filename, _ in rsync_checksums})
+
         if previous_checksum_file:
+            # Add existing checksums from the previous backup if the file
+            # still exists in need_checksum
             self.logger.info('Reusing unchanged checksums from %s',
                              previous_checksum_file)
-            unchanged_files = current_files.difference(
-                {rsynced_file[0] for rsynced_file in rsync_checksums})
 
-            for file_checksum, file_path in self._parse_checksum_file(
+            for filename, checksum in self._parse_checksum_file(
                     previous_checksum_file):
-                if file_path in unchanged_files:
-                    checksums.append((file_path, file_checksum))
+                if filename in need_checksum:
+                    checksums.append((filename, checksum))
+                    need_checksum.discard(filename)
 
-        # Add the rest of the files to the list of files that need their
-        # checksums calculated. This is typically files previously
-        # transferred in a resumed backup.
-        need_checksum = current_files.difference(
-            {checksum[0] for checksum in checksums})
+        # Calculate checksums for the rest of the files. There are typically
+        # only files left if this is a resumed backup and these files were 
+        # transferred in the incomplete backup.
         self.logger.info('Calculating checksum for %d additional files',
                          len(need_checksum))
+        need_checksum.difference_update(
+            {filename for filename, _ in checksums})
 
         for filename in need_checksum:
             file_path = os.path.join(backup_dir, filename)
-
-            if self._is_file(file_path):
-                checksum = self._get_file_md5(file_path)
-                checksums.append((filename, checksum))
+            checksum = self._get_file_md5(file_path)
+            checksums.append((filename, checksum))
 
         return checksums
 
