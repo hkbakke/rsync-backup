@@ -521,6 +521,7 @@ class Backup(object):
                     os.unlink(old_log)
 
     def _get_checksums(self, backup_dir, rsync_checksums):
+        self.logger.info('Getting checksums for backup files...')
         checksums = list()
         previous_checksum_file = None
         latest_backup = self._get_latest_backup()
