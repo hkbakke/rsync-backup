@@ -535,7 +535,7 @@ class Backup(object):
 
         # Add rsync checksums to checksums and remove those files from 
         # from the set of files needing checksum
-        self.logger.info('Using %s checksums from rsync', len(rsync_checksums))
+        self.logger.info('Using %d checksums from rsync', len(rsync_checksums))
         checksums.extend(rsync_checksums)
         need_checksum.difference_update(
             {filename for filename, _ in rsync_checksums})
