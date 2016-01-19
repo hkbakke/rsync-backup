@@ -117,8 +117,9 @@ class Backup(object):
         if self.pid_created:
             os.remove(self.pidfile)
 
-    def _get_files(self, path, relative=False):
-        follow_symlinks=False
+    @staticmethod
+    def _get_files(path, relative=False):
+        follow_symlinks = False
         path_prefix_len = len(path) + 1
 
         dirs = list()
@@ -126,15 +127,16 @@ class Backup(object):
 
         for d in dirs:
             for entry in scandir.scandir(d):
-                if entry.is_dir(follow_symlinks=follow_symlinks):
-                    dirs.append(entry.path)
-
                 if entry.is_file(follow_symlinks=follow_symlinks):
                     if relative:
                         # This is much faster than os.path.relpath
-                        yield entry.path[path_prefix_len:]
+                        f = entry.path[path_prefix_len:]
                     else:
-                        yield entry.path
+                        f = entry.path
+
+                    yield f
+                elif entry.is_dir(follow_symlinks=follow_symlinks):
+                    dirs.append(entry.path)
 
     def _parse_checksum_file(self, checksum_file):
         if os.path.basename(checksum_file) == self.checksum_file:
