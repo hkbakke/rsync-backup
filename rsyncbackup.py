@@ -6,11 +6,10 @@ import sys
 import hashlib
 import subprocess
 import re
-import stat
 import gzip
 import scandir
 from datetime import datetime
-from shutil import rmtree, copytree, move
+from shutil import move
 import smtplib
 from email.mime.text import MIMEText
 from functools import partial
@@ -465,7 +464,12 @@ class Backup(object):
                 self.logger.info('Creating %s (DRY RUN)', interval_backup)
             else:
                 self.logger.info('Creating %s', interval_backup)
-                copytree(current_backup, interval_backup, copy_function=os.link)
+
+                # Use cp instead of copytree because of performance reasons
+                #copytree(current_backup, interval_backup, copy_function=os.link)
+                subprocess.check_call([
+                    'cp', '-al', current_backup, interval_backup
+                ])
 
     def _remove_old_backups(self):
         self.logger.info('Removing old backups...')
@@ -478,7 +482,10 @@ class Backup(object):
                     self.logger.info('Removing %s (DRY RUN)', old_backup)
                 else:
                     self.logger.info('Removing %s', old_backup)
-                    rmtree(old_backup)
+
+                    # Use rm instead of rmtree because of performance reasons
+                    #rmtree(old_backup)
+                    subprocess.check_call(['rm', '-rf', old_backup])
 
     def _remove_old_logs(self):
         retention = self.config.getint(
