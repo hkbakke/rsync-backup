@@ -117,26 +117,13 @@ class Backup(object):
         if self.pid_created:
             os.remove(self.pidfile)
 
-    @staticmethod
-    def _get_files(path, relative=False):
-        follow_symlinks = False
-        path_prefix_len = len(path) + 1
-
-        dirs = list()
-        dirs.append(path)
-
-        for d in dirs:
-            for entry in scandir.scandir(d):
-                if entry.is_file(follow_symlinks=follow_symlinks):
-                    if relative:
-                        # This is much faster than os.path.relpath
-                        f = entry.path[path_prefix_len:]
-                    else:
-                        f = entry.path
-
-                    yield f
-                elif entry.is_dir(follow_symlinks=follow_symlinks):
-                    dirs.append(entry.path)
+    def _get_files(self, path):
+        for entry in scandir.scandir(path):
+            if entry.is_file(follow_symlinks=False):
+                yield entry.path
+            elif entry.is_dir(follow_symlinks=False):
+                for dir_file in self._get_files(entry.path):
+                    yield dir_file
 
     def _parse_checksum_file(self, checksum_file):
         if os.path.basename(checksum_file) == self.checksum_file:
@@ -525,9 +512,10 @@ class Backup(object):
         if latest_backup:
             previous_checksum_file = self._get_checksum_file(latest_backup)
 
+        path_prefix_len = len(backup_dir + b'/')
         need_checksum = {
-            filename for filename in
-            self._get_files(backup_dir, relative=True)
+            filename[path_prefix_len:] for filename in
+            self._get_files(backup_dir)
         }
 
         # Add rsync checksums to checksums and remove those files from 
