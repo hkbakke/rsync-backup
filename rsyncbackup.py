@@ -194,7 +194,7 @@ class Backup(object):
 
                 # Extract md5 checksum from rsync output for new or
                 # changed files
-                if re.match(b'^>', line):
+                if line.startswith(b'>'):
                     rsync_update_info = line.split(b' ', 2)
                     file_checksum = rsync_update_info[1]
                     file_path = rsync_update_info[2]
@@ -589,19 +589,25 @@ class Backup(object):
         self.pid_created = True
 
     def _get_incomplete_backup(self):
-        for backup_path in os.listdir(self.backup_root):
-            if re.match(r'^incomplete_[0-9-]{17}$', backup_path):
-                return os.path.join(self.backup_root, backup_path)
+        pattern = re.compile(r'^incomplete_[0-9-]{17}$')
+
+        for entry in scandir.scandir(self.backup_root):
+            if pattern.match(entry.name):
+                return entry.path
 
     def _get_backups(self, backup_type):
-        for backup_path in os.listdir(self.backup_root):
-            if re.match(r'^%s_[0-9-]{17}$' % backup_type, backup_path):
-                yield os.path.join(self.backup_root, backup_path)
+        pattern = re.compile(r'^%s_[0-9-]{17}$' % backup_type)
+
+        for entry in scandir.scandir(self.backup_root):
+            if pattern.match(entry.name):
+                yield entry.path
 
     def _get_logs(self):
-        for log_file_path in os.listdir(self.log_dir):
-            if re.match(r'^[0-9-]{17}.log$', log_file_path):
-                yield os.path.join(self.log_dir, log_file_path)
+        pattern = re.compile(r'^[0-9-]{17}.log$')
+
+        for entry in scandir.scandir(self.log_dir):
+            if pattern.match(entry.name):
+                yield entry.path
 
     def _get_latest_backup(self):
         try:
