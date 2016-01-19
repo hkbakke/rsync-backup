@@ -8,6 +8,7 @@ import subprocess
 import re
 import stat
 import gzip
+import scandir
 from datetime import datetime
 from shutil import rmtree, copytree, move
 import smtplib
@@ -116,31 +117,24 @@ class Backup(object):
         if self.pid_created:
             os.remove(self.pidfile)
 
-    @staticmethod
-    def _is_file(path):
-        try:
-            mode = os.stat(path, follow_symlinks=False).st_mode
-        except OSError:
-            return False
-
-        if stat.S_ISREG(mode) and not stat.S_ISLNK(mode):
-            return True
-
-        return False
-
     def _get_files(self, path, relative=False):
+        follow_symlinks=False
         path_prefix_len = len(path) + 1
 
-        for root, _, filenames in os.walk(path):
-            for filename in filenames:
-                file_path = os.path.join(root, filename)
+        dirs = list()
+        dirs.append(path)
 
-                if self._is_file(file_path):
+        for d in dirs:
+            for entry in scandir.scandir(d):
+                if entry.is_dir(follow_symlinks=follow_symlinks):
+                    dirs.append(entry.path)
+
+                if entry.is_file(follow_symlinks=follow_symlinks):
                     if relative:
                         # This is much faster than os.path.relpath
-                        yield file_path[path_prefix_len:]
-                    else: 
-                        yield file_path
+                        yield entry.path[path_prefix_len:]
+                    else:
+                        yield entry.path
 
     def _parse_checksum_file(self, checksum_file):
         if os.path.basename(checksum_file) == self.checksum_file:
