@@ -25,6 +25,7 @@ class Backup(object):
         self.logger.setLevel(logging.DEBUG)
 
         self.error = True
+        self.migrated = False
         self.status = 'Backup failed!'
         self.pid_created = False
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -57,8 +58,8 @@ class Backup(object):
                 'reporting', 'to_addrs')).split(','))
         self.pidfile = '/var/run/backup/backup-%s.pid' % (
             self.config.get('general', 'label'))
-        self.cache_dir = os.path.normpath(
-            os.path.join(self.backup_root, 'cache'))
+        self.cache_dir = os.path.join(self.backup_root, 'cache')
+        self.backups_dir = os.path.join(self.backup_root, 'backups')
         self.last_verification_file = os.path.join(
             self.cache_dir, 'last_verification')
         self.checksum_file_legacy = 'checksums.md5'
@@ -246,6 +247,7 @@ class Backup(object):
 
     def _create_dirs(self):
         self._create_dir(self.backup_root)
+        self._create_dir(self.backups_dir)
         self._create_dir(self.log_dir)
         self._create_dir(self.cache_dir)
 
@@ -379,10 +381,12 @@ class Backup(object):
 
         if not os.path.isfile(self.rules):
             raise BackupException('%s does not exist' % self.rules)
+
         command.extend(['-f', 'merge %s' % self.rules])
 
         # Check if previous backup exists and use this for hardlinking
         previous_backup = self._get_latest_backup()
+
         if previous_backup:
             command.append('--link-dest=%s' % previous_backup)
 
@@ -392,12 +396,6 @@ class Backup(object):
         if incomplete_backup:
             self.logger.info('Incomplete backup found in %s. Resuming...',
                              incomplete_backup)
-
-            if self.test:
-                dest_dir = incomplete_backup
-            else:
-                move(incomplete_backup, os.path.dirname(dest_dir))
-
             command.append('--delete-excluded')
         else:
             if not self.test:
@@ -410,22 +408,21 @@ class Backup(object):
         self.status = 'Backup failed!'
         self.error = True
 
-        dest_dir = os.path.join(
-            self.backup_root, 'incomplete_%s' % self.timestamp, 'backup')
+        dest_dir = os.path.join(self.backups_dir,
+                                'incomplete', 'backup')
         rsync_command = self._configure_rsync(dest_dir)
         self.logger.info('Starting backup labeled \"%s\" to %s',
                          self.config.get('general', 'label'), dest_dir)
         self.logger.info('Commmand: %s',
                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
-
         checksums = self._get_checksums(bytes(dest_dir, 'utf8'), rsync_checksums)
         checksum_file = os.path.join(os.path.dirname(dest_dir),
                                      self.checksum_file)
         self._write_checksum_file(checksum_file, checksums)
 
         # Rename incomplete backup to current and enforce retention
-        current_backup = os.path.join(self.backup_root,
+        current_backup = os.path.join(self.backups_dir,
                                       'current_%s' % self.timestamp)
 
         if not self.test:
@@ -454,6 +451,7 @@ class Backup(object):
             already_existing = fnmatch.filter(
                 self._get_backups(interval),
                 '*_%s' % self.intervals[interval]['pattern'])
+
             if already_existing:
                 continue
 
@@ -596,16 +594,28 @@ class Backup(object):
         self.pid_created = True
 
     def _get_incomplete_backup(self):
-        pattern = re.compile(r'^incomplete_[0-9-]{17}$')
+        path = os.path.join(self.backups_dir, 'incomplete')
+
+        if os.path.isdir(path):
+            return path
+
+    def _migrate_backups(self):
+        pattern = re.compile(r'^.+_[0-9-]{17}$')
 
         for entry in scandir.scandir(self.backup_root):
             if pattern.match(entry.name):
-                return entry.path
+                move(entry.path, os.path.join(self.backups_dir, entry.name))
+
+        self.migrated=True
 
     def _get_backups(self, backup_type):
+        if not self.migrated:
+            # Migrate backups if using old directory structure
+            self._migrate_backups()
+
         pattern = re.compile(r'^%s_[0-9-]{17}$' % backup_type)
 
-        for entry in scandir.scandir(self.backup_root):
+        for entry in scandir.scandir(self.backups_dir):
             if pattern.match(entry.name):
                 yield entry.path
 
@@ -631,7 +641,7 @@ class Backup(object):
             raise BackupException('You must specify the folder name of the '
                 'backup, not a path')
 
-        backup_dir = os.path.join(self.backup_root, backup, 'backup')
+        backup_dir = os.path.join(self.backups_dir, backup, 'backup')
 
         if not os.path.isdir(backup_dir):
             backup_dir = None
