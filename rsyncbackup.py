@@ -422,13 +422,13 @@ class Backup(object):
         self._write_checksum_file(checksum_file, checksums)
 
         # Rename incomplete backup to current and enforce retention
-        current_backup = os.path.join(self.backups_dir,
+        final_dest = os.path.join(self.backups_dir,
                                       'current_%s' % self.timestamp)
 
         if not self.test:
-            move(os.path.dirname(dest_dir), current_backup)
+            move(os.path.dirname(dest_dir), final_dest)
 
-        self._create_interval_backups(current_backup)
+        self._create_interval_backups(final_dest)
         self._remove_old_backups()
         self._remove_old_logs()
 
@@ -440,7 +440,7 @@ class Backup(object):
         self.logger.info(self.status)
         self.error = False
 
-    def _create_interval_backups(self, current_backup):
+    def _create_interval_backups(self, source_backup):
         for interval in self.intervals:
             if interval == 'current':
                 continue
@@ -455,7 +455,7 @@ class Backup(object):
             if already_existing:
                 continue
 
-            interval_backup = current_backup.replace(
+            interval_backup = source_backup.replace(
                 'current_', '%s_' % interval)
 
             if self.test:
@@ -466,7 +466,7 @@ class Backup(object):
                 # Use cp instead of copytree because of performance reasons
                 #copytree(current_backup, interval_backup, copy_function=os.link)
                 subprocess.check_call([
-                    'cp', '-al', current_backup, interval_backup
+                    'cp', '-al', source_backup, interval_backup
                 ])
 
     def _remove_old_backups(self):
