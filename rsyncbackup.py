@@ -464,7 +464,8 @@ class RsyncBackup(object):
                                     'incomplete_%s' % self.timestamp))
         rsync_command = self._configure_rsync(backup)
         self.logger.info('Starting backup labeled \"%s\" to %s',
-                         self.config.get('general', 'label'), backup.backup_dir)
+                         self.config.get('general', 'label'),
+                         backup.backup_dir.decode('utf8'))
         self.logger.info('Commmand: %s',
                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
