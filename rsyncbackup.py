@@ -606,7 +606,7 @@ class Backup(object):
             if pattern.match(entry.name):
                 move(entry.path, os.path.join(self.backups_dir, entry.name))
 
-        self.migrated=True
+        self.migrated = True
 
     def _get_backups(self, backup_type):
         if not self.migrated:
