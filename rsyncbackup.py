@@ -319,6 +319,7 @@ class Backup(object):
                 os.path.join(bytes(backup_dir, 'utf8'), filename))
             checked_count += 1
             current_checksum = self._get_file_md5(file_path)
+
             if current_checksum == stored_checksum:
                 verified_count += 1
             else:
