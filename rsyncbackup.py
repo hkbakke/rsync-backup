@@ -526,6 +526,11 @@ class RsyncBackup(object):
         self.logger.info('Removing old backups...')
         backups = sorted(self._get_backups(), key=attrgetter('timestamp'),
                          reverse=True)
+        to_delete = []
+
+        # Remove legacy folders
+        for backup in [b for b in backups if b.interval == 'current']:
+            to_delete.append(backup)
 
         for interval in self.intervals:
             interval_backups = [b for b in backups if b.interval == interval]
@@ -537,16 +542,19 @@ class RsyncBackup(object):
                                         '%s_%s' % (interval, pattern))
 
                     if not m:
-                        backup.remove()
+                        to_delete.append(b)
             else:
                 retention = self.intervals[interval]['retention']
 
                 for backup in interval_backups[retention:]:
-                    if self.test:
-                        self.logger.info('Removing %s (DRY RUN)', backup.path)
-                    else:
-                        self.logger.info('Removing %s', backup.path)
-                        backup.remove()
+                    to_delete.append(backup)
+
+        for backup in to_delete:
+            if self.test:
+                self.logger.info('Removing %s (DRY RUN)', backup.path)
+            else:
+                self.logger.info('Removing %s', backup.path)
+                backup.remove()
 
     def _remove_old_logs(self):
         retention = self.config.getint(
