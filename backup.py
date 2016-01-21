@@ -16,7 +16,7 @@ def init_backup(config_name, test, verify):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
     try:
-        with rsyncbackup.Backup(config_name, test) as backup:
+        with rsyncbackup.RsyncBackup(config_name, test) as backup:
             if verify:
                 backup.verify(verify)
             else:

@@ -13,7 +13,7 @@ from shutil import move
 import smtplib
 from email.mime.text import MIMEText
 from functools import partial
-from operator import itemgetter
+from operator import attrgetter
 
 
 class BackupException(Exception):
@@ -21,6 +21,81 @@ class BackupException(Exception):
 
 
 class Backup(object):
+    def __init__(self, path):
+        self.path = path
+        self.name = os.path.basename(path)
+        self.timestamp, self.interval = self._parse_name(self.name)
+        self.backup_dir = bytes(os.path.join(self.path, 'backup'), 'utf8')
+        self._checksum_file = os.path.join(self.path, 'checksums.gz')
+
+    @property
+    def checksums(self):
+        checksum_file, version = self.checksum_file
+
+        if version == 2:
+            with gzip.open(checksum_file, 'rb') as f:
+                for line in f:
+                    checksum, filename = line.split(None, 1)
+                    filename = filename.strip()
+
+                    yield (filename, checksum)
+        elif version == 1:
+            with open(checksum_file, 'rb') as f:
+                for line in f:
+                    checksum, filename = line.split(None, 1)
+                    filename = filename.strip()
+
+                    # Remain compatible with old checksum files
+                    if filename.startswith(b'./'):
+                        filename = filename[len(b'./'):]
+
+                    yield (filename, checksum)
+
+    @checksums.setter
+    def checksums(self, checksums):
+        with gzip.open(self._checksum_file, 'wb') as f:
+            for filename, checksum in checksums:
+                f.write(checksum + b'  ' + filename + b'\n')
+
+    @staticmethod
+    def _parse_name(name):
+        pattern = re.compile(r'^(.+)_([0-9-]{17})$')
+        m = pattern.match(name)
+        timestamp = m.group(2)
+        interval = m.group(1)
+        return (timestamp, interval)
+
+    def get_files(self, path=None):
+        if path is None:
+            path = self.backup_dir
+
+        for entry in scandir.scandir(path):
+            if entry.is_file(follow_symlinks=False):
+                yield entry.path
+            elif entry.is_dir(follow_symlinks=False):
+                for dir_file in self.get_files(entry.path):
+                    yield dir_file
+
+    def remove(self):
+        subprocess.check_call(['rm', '-rf', self.path])
+
+    @property
+    def checksum_file(self):
+        checksum_file_legacy = os.path.join(self.path, 'checksums.md5')
+        filename = None
+        version = None
+
+        if os.path.exists(self._checksum_file):
+            filename = self._checksum_file
+            version = 2
+        elif os.path.exists(checksum_file_legacy):
+            filename = checksum_file_legacy
+            version = 1
+
+        return (filename, version)
+
+
+class RsyncBackup(object):
     def __init__(self, config_name, test=False):
         self.logger = logging.getLogger('%s.%s' % (__name__, config_name))
         self.logger.setLevel(logging.DEBUG)
@@ -63,8 +138,6 @@ class Backup(object):
         self.backups_dir = os.path.join(self.backup_root, 'backups')
         self.last_verification_file = os.path.join(
             self.cache_dir, 'last_verification')
-        self.checksum_file_legacy = 'checksums.md5'
-        self.checksum_file = 'checksums.gz'
         self.umask = int(self.global_config.get('general', 'umask',
                                                 fallback='0o077'), 8)
         os.umask(self.umask)
@@ -117,34 +190,6 @@ class Backup(object):
 
         if self.pid_created:
             os.remove(self.pidfile)
-
-    def _get_files(self, path):
-        for entry in scandir.scandir(path):
-            if entry.is_file(follow_symlinks=False):
-                yield entry.path
-            elif entry.is_dir(follow_symlinks=False):
-                for dir_file in self._get_files(entry.path):
-                    yield dir_file
-
-    def _parse_checksum_file(self, checksum_file):
-        if os.path.basename(checksum_file) == self.checksum_file:
-            with gzip.open(checksum_file, 'rb') as f:
-                for line in f:
-                    checksum, filename = line.split(None, 1)
-                    filename = filename.strip()
-
-                    yield (filename, checksum)
-        elif os.path.basename(checksum_file) == self.checksum_file_legacy:
-            with open(checksum_file, 'rb') as f:
-                for line in f:
-                    checksum, filename = line.split(None, 1)
-                    filename = filename.strip()
-
-                    # Remain compatible with old checksum files
-                    if filename.startswith(b'./'):
-                        filename = filename[len(b'./'):]
-
-                    yield (filename, checksum)
 
     @staticmethod
     def _get_file_md5(filename):
@@ -207,19 +252,6 @@ class Backup(object):
                 'Rsync returned non-zero exit code [ %s ]' % exit_code)
 
         return checksums
-
-    def _write_checksum_file(self, checksum_file, checksums):
-        if self.test:
-            self.logger.info('Adding %d md5 checksums to %s (DRY RUN)',
-                             len(checksums), checksum_file)
-            return
-
-        self.logger.info('Adding %d md5 checksums to %s', len(checksums),
-                         checksum_file)
-
-        with gzip.open(checksum_file, 'wb') as f:
-            for filename, checksum in checksums:
-                f.write(checksum + b'  ' + filename + b'\n')
 
     @staticmethod
     def _get_end_status(log_file):
@@ -302,7 +334,7 @@ class Backup(object):
         if not backup:
             raise BackupException('There is no backup to verify')
 
-        checksum_file = self._get_checksum_file(backup)
+        checksum_file = backup.checksumfile[0]
 
         if not checksum_file:
             raise BackupException(
@@ -315,11 +347,9 @@ class Backup(object):
         failed_count = 0
         failed_files = list()
 
-        for filename, stored_checksum in self._parse_checksum_file(
-                checksum_file):
+        for filename, stored_checksum in backup.checksums:
             file_path = os.path.normpath(
-                os.path.join(bytes(self._get_backup_dir(backup), 'utf8'),
-                             filename))
+                os.path.join(backup.backup_dir, filename))
             checked_count += 1
             current_checksum = self._get_file_md5(file_path)
 
@@ -361,7 +391,7 @@ class Backup(object):
 
         self.logger.info('')
 
-    def _configure_rsync(self, dest_dir):
+    def _configure_rsync(self, backup):
         rsync = self.config.get('rsync', 'pathname', fallback='rsync')
         command = [rsync, '-avihh', '--stats', '--out-format=%i %C %n%L']
         command.extend(self.config.get('rsync', 'additional_options').split())
@@ -393,25 +423,26 @@ class Backup(object):
 
         if previous_backup:
             command.append('--link-dest=%s' %
-                           self._get_backup_dir(previous_backup))
+                           previous_backup.backup_dir.decode('utf8'))
 
         # Continue previously incomplete backup if available
         incomplete_backup = self._get_incomplete_backup()
 
         if incomplete_backup:
             self.logger.info('Incomplete backup found in %s. Resuming...',
-                             incomplete_backup)
+                             incomplete_backup.path)
             command.append('--delete-excluded')
+            move(incomplete_backup.path, backup.path)
         else:
             if not self.test:
-                self._create_dir(dest_dir)
+                self._create_dir(backup.backup_dir)
 
-        command.extend([source, dest_dir])
+        command.extend([source, backup.backup_dir.decode('utf8')])
         return command
 
     def _get_final_dest(self):
         current_daily = fnmatch.filter(
-            [backup[0] for backup in self._get_backups('daily')],
+            [b.path for b in self._get_backups() if b.interval == 'daily'],
             '*_%s' % self.intervals['daily']['pattern'])
 
         if current_daily:
@@ -427,24 +458,24 @@ class Backup(object):
         self.status = 'Backup failed!'
         self.error = True
 
-        dest_dir = self._get_backup_dir(os.path.join(self.backups_dir,
-                                        'incomplete'))
-        rsync_command = self._configure_rsync(dest_dir)
+        backup = Backup(os.path.join(self.backups_dir,
+                                    'incomplete_%s' % self.timestamp))
+        rsync_command = self._configure_rsync(backup)
         self.logger.info('Starting backup labeled \"%s\" to %s',
-                         self.config.get('general', 'label'), dest_dir)
+                         self.config.get('general', 'label'), backup.backup_dir)
         self.logger.info('Commmand: %s',
                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
-        checksums = self._get_checksums(bytes(dest_dir, 'utf8'), rsync_checksums)
-        checksum_file = os.path.join(os.path.dirname(dest_dir),
-                                     self.checksum_file)
-        self._write_checksum_file(checksum_file, checksums)
+        checksums = self._get_checksums(backup, rsync_checksums)
+        backup.checksums = checksums
+        self.logger.info('Added %d md5 checksums to %s', len(checksums),
+                         backup.checksum_file[0])
 
         # Rename incomplete backup to current and enforce retention
         final_dest = self._get_final_dest()
 
         if not self.test:
-            move(os.path.dirname(dest_dir), final_dest)
+            move(backup.path, final_dest)
 
         self._create_interval_backups(final_dest)
         self._remove_old_backups()
@@ -467,7 +498,7 @@ class Backup(object):
                 continue
 
             already_existing = fnmatch.filter(
-                [backup[0] for backup in self._get_backups(interval)],
+                [b.path for b in self._get_backups() if b.interval == interval],
                 '*_%s' % self.intervals[interval]['pattern'])
 
             if already_existing:
@@ -489,34 +520,29 @@ class Backup(object):
 
     def _remove_old_backups(self):
         self.logger.info('Removing old backups...')
+        backups = sorted(self._get_backups(), key=attrgetter('timestamp'),
+                         reverse=True)
 
         for interval in self.intervals:
-            backups = sorted(self._get_backups(interval), key=itemgetter(1),
-                             reverse=True)
+            interval_backups = [b for b in backups if b.interval == interval]
             pattern = self.intervals[interval]['pattern']
-            to_delete = list()
 
             if interval == 'custom':
-                for backup, _, backup_name in backups:
-                    m = fnmatch.fnmatch(backup_name,
+                for backup in interval_backups:
+                    m = fnmatch.fnmatch(backup.name,
                                         '%s_%s' % (interval, pattern))
 
                     if not m:
-                        to_delete.append(backup)
+                        backup.remove()
             else:
                 retention = self.intervals[interval]['retention']
 
-                for backup, _ in backups[retention:]:
+                for backup in interval_backups[retention:]:
                     if self.test:
-                        self.logger.info('Removing %s (DRY RUN)', backup)
+                        self.logger.info('Removing %s (DRY RUN)', backup.path)
                     else:
-                        self.logger.info('Removing %s', backup)
-                        to_delete.append(backup)
-
-            for d in to_delete:
-                # Use rm instead of rmtree because of performance reasons
-                #rmtree(d)
-                subprocess.check_call(['rm', '-rf', d])
+                        self.logger.info('Removing %s', backup.path)
+                        backup.remove()
 
     def _remove_old_logs(self):
         retention = self.config.getint(
@@ -541,19 +567,13 @@ class Backup(object):
                     self.logger.info('Removing %s', old_log)
                     os.unlink(old_log)
 
-    def _get_checksums(self, backup_dir, rsync_checksums):
+    def _get_checksums(self, backup, rsync_checksums):
         self.logger.info('Getting checksums for backup files...')
         checksums = list()
-        previous_checksum_file = None
-        latest_backup = self._get_latest_backup()
-
-        if latest_backup:
-            previous_checksum_file = self._get_checksum_file(latest_backup)
-
-        path_prefix_len = len(backup_dir + b'/')
+        path_prefix_len = len(backup.backup_dir + b'/')
         need_checksum = {
             filename[path_prefix_len:] for filename in
-            self._get_files(backup_dir)
+            backup.get_files()
         }
 
         # Add rsync checksums to checksums and remove those files from 
@@ -563,14 +583,15 @@ class Backup(object):
         need_checksum.difference_update(
             {filename for filename, _ in rsync_checksums})
 
-        if previous_checksum_file:
+        latest_backup = self._get_latest_backup()
+
+        if latest_backup:
             # Add existing checksums from the previous backup if the file
             # still exists in need_checksum
             self.logger.info('Reusing unchanged checksums from %s',
-                             previous_checksum_file)
+                             latest_backup.checksum_file[0])
 
-            for filename, checksum in self._parse_checksum_file(
-                    previous_checksum_file):
+            for filename, checksum in latest_backup.checksums:
                 if filename in need_checksum:
                     checksums.append((filename, checksum))
                     need_checksum.discard(filename)
@@ -584,7 +605,7 @@ class Backup(object):
             {filename for filename, _ in checksums})
 
         for filename in need_checksum:
-            file_path = os.path.join(backup_dir, filename)
+            file_path = os.path.join(backup.backup_dir, filename)
             checksum = self._get_file_md5(file_path)
             checksums.append((filename, checksum))
 
@@ -627,10 +648,11 @@ class Backup(object):
         self.pid_created = True
 
     def _get_incomplete_backup(self):
-        path = os.path.join(self.backups_dir, 'incomplete')
+        pattern = re.compile(r'^incomplete_[0-9-]{17}$')
 
-        if os.path.isdir(path):
-            return path
+        for backup in self._get_backups():
+            if pattern.match(backup.name):
+                return backup
 
     def _migrate_backups(self):
         pattern = re.compile(r'^.+_[0-9-]{17}$')
@@ -641,22 +663,16 @@ class Backup(object):
 
         self.migrated = True
 
-    def _get_backups(self, backup_type=None):
+    def _get_backups(self):
         if not self.migrated:
             # Migrate backups if using old directory structure
             self._migrate_backups()
 
-        if backup_type:
-            pattern = re.compile(r'^%s_([0-9-]{17})$' % backup_type)
-        else:
-            pattern = re.compile(r'^.+_([0-9-]{17})$')
+        pattern = re.compile(r'^.+_[0-9-]{17}$')
 
         for entry in scandir.scandir(self.backups_dir):
-            m = pattern.match(entry.name)
-
-            if m:
-                timestamp = m.group(1)
-                yield (entry.path, timestamp, entry.name)
+            if pattern.match(entry.name):
+                yield Backup(entry.path)
 
     def _get_logs(self):
         pattern = re.compile(r'^[0-9-]{17}.log$')
@@ -666,40 +682,27 @@ class Backup(object):
                 yield entry.path
 
     def _get_latest_backup(self):
-        try:
-            backup = sorted(self._get_backups(), key=itemgetter(1),
-                            reverse=True)[0][0]
-        except IndexError:
-            backup = None
+        backup = None
+
+        for backup in sorted(self._get_backups(), key=attrgetter('timestamp'),
+                             reverse=True):
+            if backup.interval != 'incomplete':
+                return backup
 
         return backup
 
     def _get_backup_by_name(self, backup_name):
-        if os.path.split(backup)[0]:
+        if os.path.split(backup_name)[0]:
             raise BackupException('You must specify the folder name of the '
                 'backup, not a path')
 
-        backup = os.path.join(self.backups_dir, backup)
+        path = os.path.join(self.backups_dir, backup_name)
+        backup = Backup(path)
 
-        if not os.path.isdir(backup_dir):
+        if not os.path.isdir(backup.backup_dir):
             backup = None
 
         return backup
-
-    def _get_backup_dir(self, backup):
-        return os.path.join(backup, 'backup')
-
-    def _get_checksum_file(self, backup):
-        filename = None
-        checksum_file = os.path.join(backup, self.checksum_file)
-        checksum_file_legacy = os.path.join(backup, self.checksum_file_legacy)
-
-        if os.path.exists(checksum_file):
-            filename = checksum_file
-        elif os.path.exists(checksum_file_legacy):
-            filename = checksum_file_legacy
-
-        return filename
 
     def _send_mail(self, status, logs):
         summary = ''
