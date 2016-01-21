@@ -32,6 +32,9 @@ class Backup(object):
     def checksums(self):
         checksum_file, version = self.checksum_file
 
+        if not checksum_file:
+            return []
+
         if version == 2:
             with gzip.open(checksum_file, 'rb') as f:
                 for line in f:
@@ -323,9 +326,6 @@ class RsyncBackup(object):
         self.status = 'Backup verification failed!'
         self.error = True
 
-        self.logger.info('Initializing checksum verification for %s',
-                         self.backup_root)
-
         if backup_name == '_current_':
             backup = self._get_latest_backup()
         else:
@@ -334,7 +334,9 @@ class RsyncBackup(object):
         if not backup:
             raise BackupException('There is no backup to verify')
 
-        checksum_file = backup.checksumfile[0]
+        self.logger.info('Initializing checksum verification for %s',
+                         backup.path)
+        checksum_file = backup.checksum_file[0]
 
         if not checksum_file:
             raise BackupException(
@@ -466,10 +468,12 @@ class RsyncBackup(object):
         self.logger.info('Commmand: %s',
                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
-        checksums = self._get_checksums(backup, rsync_checksums)
-        backup.checksums = checksums
-        self.logger.info('Added %d md5 checksums to %s', len(checksums),
-                         backup.checksum_file[0])
+
+        if not self.test:
+            checksums = self._get_checksums(backup, rsync_checksums)
+            backup.checksums = checksums
+            self.logger.info('Added %d md5 checksums to %s', len(checksums),
+                             backup.checksum_file[0])
 
         # Rename incomplete backup to current and enforce retention
         final_dest = self._get_final_dest()
@@ -584,12 +588,13 @@ class RsyncBackup(object):
             {filename for filename, _ in rsync_checksums})
 
         latest_backup = self._get_latest_backup()
+        checksum_file = latest_backup.checksum_file[0]
 
-        if latest_backup:
+        if checksum_file:
             # Add existing checksums from the previous backup if the file
             # still exists in need_checksum
             self.logger.info('Reusing unchanged checksums from %s',
-                             latest_backup.checksum_file[0])
+                             checksum_file)
 
             for filename, checksum in latest_backup.checksums:
                 if filename in need_checksum:
