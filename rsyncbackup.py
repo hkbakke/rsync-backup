@@ -13,6 +13,7 @@ from shutil import move
 import smtplib
 from email.mime.text import MIMEText
 from functools import partial
+from operator import itemgetter
 
 
 class BackupException(Exception):
@@ -70,8 +71,8 @@ class Backup(object):
 
         # Configure backup intervals
         self.intervals = {
-            'current': {
-                'retention': 1
+            'custom': {
+                'pattern': '%s-*' % current_datetime.strftime('%Y-%m-%d')
             },
             'daily': {
                 'retention': self.config.getint(
@@ -286,22 +287,23 @@ class Backup(object):
 
         self.error = False
 
-    def verify(self, backup='_current_'):
+    def verify(self, backup_name='_current_'):
         self.status = 'Backup verification failed!'
         self.error = True
 
         self.logger.info('Initializing checksum verification for %s',
                          self.backup_root)
 
-        if backup == '_current_':
-            backup_dir = self._get_latest_backup()
+        if backup_name == '_current_':
+            backup = self._get_latest_backup()
         else:
-            backup_dir = self._get_backup_dir(backup)
+            backup = self._get_backup_by_name(backup_name)
 
-        if not backup_dir:
+        if not backup:
             raise BackupException('There is no backup to verify')
 
-        checksum_file = self._get_checksum_file(backup_dir)
+        checksum_file = self._get_checksum_file(backup)
+
         if not checksum_file:
             raise BackupException(
                 'There is no checksum file to verify for this backup')
@@ -316,7 +318,8 @@ class Backup(object):
         for filename, stored_checksum in self._parse_checksum_file(
                 checksum_file):
             file_path = os.path.normpath(
-                os.path.join(bytes(backup_dir, 'utf8'), filename))
+                os.path.join(bytes(self._get_backup_dir(backup), 'utf8'),
+                             filename))
             checked_count += 1
             current_checksum = self._get_file_md5(file_path)
 
@@ -343,7 +346,7 @@ class Backup(object):
             self.status = 'Backup verification completed successfully!'
             self.logger.info(self.status)
 
-        if backup == '_current_':
+        if backup_name == '_current_':
             self._write_timestamp(self.last_verification_file)
 
         self.error = False
@@ -389,7 +392,8 @@ class Backup(object):
         previous_backup = self._get_latest_backup()
 
         if previous_backup:
-            command.append('--link-dest=%s' % previous_backup)
+            command.append('--link-dest=%s' %
+                           self._get_backup_dir(previous_backup))
 
         # Continue previously incomplete backup if available
         incomplete_backup = self._get_incomplete_backup()
@@ -405,12 +409,26 @@ class Backup(object):
         command.extend([source, dest_dir])
         return command
 
+    def _get_final_dest(self):
+        current_daily = fnmatch.filter(
+            [backup[0] for backup in self._get_backups('daily')],
+            '*_%s' % self.intervals['daily']['pattern'])
+
+        if current_daily:
+            final_dest = os.path.join(self.backups_dir,
+                                      'custom_%s' % self.timestamp)
+        else:
+            final_dest = os.path.join(self.backups_dir,
+                                      'daily_%s' % self.timestamp)
+
+        return final_dest
+
     def backup(self):
         self.status = 'Backup failed!'
         self.error = True
 
-        dest_dir = os.path.join(self.backups_dir,
-                                'incomplete', 'backup')
+        dest_dir = self._get_backup_dir(os.path.join(self.backups_dir,
+                                        'incomplete'))
         rsync_command = self._configure_rsync(dest_dir)
         self.logger.info('Starting backup labeled \"%s\" to %s',
                          self.config.get('general', 'label'), dest_dir)
@@ -423,8 +441,7 @@ class Backup(object):
         self._write_checksum_file(checksum_file, checksums)
 
         # Rename incomplete backup to current and enforce retention
-        final_dest = os.path.join(self.backups_dir,
-                                      'current_%s' % self.timestamp)
+        final_dest = self._get_final_dest()
 
         if not self.test:
             move(os.path.dirname(dest_dir), final_dest)
@@ -443,21 +460,21 @@ class Backup(object):
 
     def _create_interval_backups(self, source_backup):
         for interval in self.intervals:
-            if interval == 'current':
+            if interval == 'custom':
                 continue
 
             if self.intervals[interval]['retention'] < 1:
                 continue
 
             already_existing = fnmatch.filter(
-                self._get_backups(interval),
+                [backup[0] for backup in self._get_backups(interval)],
                 '*_%s' % self.intervals[interval]['pattern'])
 
             if already_existing:
                 continue
 
-            interval_backup = source_backup.replace(
-                'current_', '%s_' % interval)
+            interval_backup = os.path.join(self.backups_dir,
+                                           '%s_%s' % (interval, self.timestamp))
 
             if self.test:
                 self.logger.info('Creating %s (DRY RUN)', interval_backup)
@@ -465,26 +482,41 @@ class Backup(object):
                 self.logger.info('Creating %s', interval_backup)
 
                 # Use cp instead of copytree because of performance reasons
-                #copytree(current_backup, interval_backup, copy_function=os.link)
+                #copytree(source_backup, interval_backup, copy_function=os.link)
                 subprocess.check_call([
                     'cp', '-al', source_backup, interval_backup
                 ])
 
     def _remove_old_backups(self):
         self.logger.info('Removing old backups...')
-        for interval in self.intervals:
-            old_backups = [i for i in self._get_backups(interval)]
-            old_backups.sort(reverse=True)
-            for old_backup in old_backups[
-                    self.intervals[interval]['retention']:]:
-                if self.test:
-                    self.logger.info('Removing %s (DRY RUN)', old_backup)
-                else:
-                    self.logger.info('Removing %s', old_backup)
 
-                    # Use rm instead of rmtree because of performance reasons
-                    #rmtree(old_backup)
-                    subprocess.check_call(['rm', '-rf', old_backup])
+        for interval in self.intervals:
+            backups = sorted(self._get_backups(interval), key=itemgetter(1),
+                             reverse=True)
+            pattern = self.intervals[interval]['pattern']
+            to_delete = list()
+
+            if interval == 'custom':
+                for backup, _, backup_name in backups:
+                    m = fnmatch.fnmatch(backup_name,
+                                        '%s_%s' % (interval, pattern))
+
+                    if not m:
+                        to_delete.append(backup)
+            else:
+                retention = self.intervals[interval]['retention']
+
+                for backup, _ in backups[retention:]:
+                    if self.test:
+                        self.logger.info('Removing %s (DRY RUN)', backup)
+                    else:
+                        self.logger.info('Removing %s', backup)
+                        to_delete.append(backup)
+
+            for d in to_delete:
+                # Use rm instead of rmtree because of performance reasons
+                #rmtree(d)
+                subprocess.check_call(['rm', '-rf', d])
 
     def _remove_old_logs(self):
         retention = self.config.getint(
@@ -609,16 +641,22 @@ class Backup(object):
 
         self.migrated = True
 
-    def _get_backups(self, backup_type):
+    def _get_backups(self, backup_type=None):
         if not self.migrated:
             # Migrate backups if using old directory structure
             self._migrate_backups()
 
-        pattern = re.compile(r'^%s_[0-9-]{17}$' % backup_type)
+        if backup_type:
+            pattern = re.compile(r'^%s_([0-9-]{17})$' % backup_type)
+        else:
+            pattern = re.compile(r'^.+_([0-9-]{17})$')
 
         for entry in scandir.scandir(self.backups_dir):
-            if pattern.match(entry.name):
-                yield entry.path
+            m = pattern.match(entry.name)
+
+            if m:
+                timestamp = m.group(1)
+                yield (entry.path, timestamp, entry.name)
 
     def _get_logs(self):
         pattern = re.compile(r'^[0-9-]{17}.log$')
@@ -629,32 +667,32 @@ class Backup(object):
 
     def _get_latest_backup(self):
         try:
-            backup = os.path.join(
-                sorted(self._get_backups('current'), reverse=True)[0],
-                'backup')
+            backup = sorted(self._get_backups(), key=itemgetter(1),
+                            reverse=True)[0][0]
         except IndexError:
             backup = None
 
         return backup
 
-    def _get_backup_dir(self, backup):
+    def _get_backup_by_name(self, backup_name):
         if os.path.split(backup)[0]:
             raise BackupException('You must specify the folder name of the '
                 'backup, not a path')
 
-        backup_dir = os.path.join(self.backups_dir, backup, 'backup')
+        backup = os.path.join(self.backups_dir, backup)
 
         if not os.path.isdir(backup_dir):
-            backup_dir = None
+            backup = None
 
-        return backup_dir
+        return backup
+
+    def _get_backup_dir(self, backup):
+        return os.path.join(backup, 'backup')
 
     def _get_checksum_file(self, backup):
         filename = None
-        checksum_file = os.path.join(
-            os.path.dirname(backup), self.checksum_file)
-        checksum_file_legacy = os.path.join(
-            os.path.dirname(backup), self.checksum_file_legacy)
+        checksum_file = os.path.join(backup, self.checksum_file)
+        checksum_file_legacy = os.path.join(backup, self.checksum_file_legacy)
 
         if os.path.exists(checksum_file):
             filename = checksum_file
