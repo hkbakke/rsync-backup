@@ -25,7 +25,7 @@ class Backup(object):
         self.path = path
         self.name = os.path.basename(path)
         self.timestamp, self.interval = self._parse_name(self.name)
-        self.backup_dir = bytes(os.path.join(self.path, 'backup'), 'utf8')
+        self.backup_dir = os.path.join(self.path, 'backup')
         self._checksum_file = os.path.join(self.path, 'checksums.gz')
 
     @property
@@ -81,7 +81,7 @@ class Backup(object):
 
     def _get_files(self, path=None):
         if path is None:
-            path = self.backup_dir
+            path = bytes(self.backup_dir, 'utf8')
 
         for entry in scandir.scandir(path):
             if entry.is_file(follow_symlinks=False):
@@ -354,8 +354,7 @@ class RsyncBackup(object):
         failed_files = list()
 
         for filename, stored_checksum in backup.checksums:
-            file_path = os.path.normpath(
-                os.path.join(backup.backup_dir, filename))
+            file_path = os.path.join(bytes(backup.backup_dir, 'utf8'), filename)
             checked_count += 1
             current_checksum = self._get_file_md5(file_path)
 
@@ -429,7 +428,7 @@ class RsyncBackup(object):
 
         if previous_backup:
             command.append('--link-dest=%s' %
-                           previous_backup.backup_dir.decode('utf8'))
+                           previous_backup.backup_dir)
 
         # Continue previously incomplete backup if available
         incomplete_backup = self._get_incomplete_backup()
@@ -443,7 +442,7 @@ class RsyncBackup(object):
             if not self.test:
                 self._create_dir(backup.backup_dir)
 
-        command.extend([source, backup.backup_dir.decode('utf8')])
+        command.extend([source, backup.backup_dir])
         return command
 
     def _get_final_dest(self):
@@ -469,7 +468,7 @@ class RsyncBackup(object):
         rsync_command = self._configure_rsync(backup)
         self.logger.info('Starting backup labeled \"%s\" to %s',
                          self.config.get('general', 'label'),
-                         backup.backup_dir.decode('utf8'))
+                         backup.backup_dir)
         self.logger.info('Commmand: %s',
                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
@@ -587,7 +586,7 @@ class RsyncBackup(object):
     def _get_checksums(self, backup, rsync_checksums):
         self.logger.info('Getting checksums for backup files...')
         checksums = list()
-        path_prefix_len = len(backup.backup_dir + b'/')
+        path_prefix_len = len(bytes('%s/' % backup.backup_dir, 'utf8'))
         need_checksum = {
             filename[path_prefix_len:] for filename in
             backup.files
