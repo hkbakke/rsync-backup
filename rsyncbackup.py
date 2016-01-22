@@ -98,6 +98,30 @@ class Backup(object):
         interval = m.group(1)
         return (timestamp, interval)
 
+    @staticmethod
+    def _get_file_md5(file_path):
+        """
+        Return bytes instead of a string as bytes is used in all other checksum
+        file operations as filenames are bytes without encoding in Linux.
+        """
+        md5 = hashlib.md5()
+        chunksize = 128*512
+        with open(file_path, 'rb') as f:
+            for chunk in iter(partial(f.read, chunksize), b''):
+                md5.update(chunk)
+        return bytes(md5.hexdigest(), 'utf8')
+
+    def verify(self):
+        for filename, checksum in self.checksums:
+            file_path = os.path.join(bytes(self.backup_dir, 'utf8'), filename)
+            current_checksum = self._get_file_md5(file_path)
+            verified = False
+
+            if current_checksum == checksum:
+                verified = True
+
+            yield (file_path, verified)
+
     def remove(self):
         subprocess.check_call(['rm', '-rf', self.path])
 
@@ -199,15 +223,14 @@ class RsyncBackup(object):
             os.remove(self.pidfile)
 
     @staticmethod
-    def _get_file_md5(filename):
+    def _get_file_md5(file_path):
         """
-        Return bytes instead of a string as bytes is used in all
-        other checksum file operations because filenames are bytes without
-        encoding in Linux
+        Return bytes instead of a string as bytes is used in all other checksum
+        file operations as filenames are bytes without encoding in Linux.
         """
         md5 = hashlib.md5()
         chunksize = 128*512
-        with open(filename, 'rb') as f:
+        with open(file_path, 'rb') as f:
             for chunk in iter(partial(f.read, chunksize), b''):
                 md5.update(chunk)
         return bytes(md5.hexdigest(), 'utf8')
@@ -353,19 +376,14 @@ class RsyncBackup(object):
         failed_count = 0
         failed_files = list()
 
-        for filename, stored_checksum in backup.checksums:
-            file_path = os.path.join(bytes(backup.backup_dir, 'utf8'), filename)
+        for file_path, verified in backup.verify():
             checked_count += 1
-            current_checksum = self._get_file_md5(file_path)
 
-            if current_checksum == stored_checksum:
+            if verified:
                 verified_count += 1
             else:
                 failed_count += 1
-                self.logger.error('[FAILED] %s [%s => %s]',
-                                  file_path.decode('utf8'),
-                                  current_checksum.decode('utf8'),
-                                  stored_checksum.decode('utf8'))
+                self.logger.error('[FAILED] %s', file_path)
 
         # Use tuples in a list instead of a dictionary to make the stats output
         # ordered
