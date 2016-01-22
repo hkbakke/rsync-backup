@@ -564,7 +564,7 @@ class RsyncBackup(object):
                                         '%s_%s' % (interval, pattern))
 
                     if not m:
-                        to_delete.append(b)
+                        to_delete.append(backup)
             else:
                 retention = self.intervals[interval]['retention']
 
