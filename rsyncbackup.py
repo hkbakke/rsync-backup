@@ -132,7 +132,6 @@ class RsyncBackup(object):
         self.logger.setLevel(logging.DEBUG)
 
         self.error = True
-        self.migrated = False
         self.status = 'Backup failed!'
         self.pid_created = False
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -550,10 +549,6 @@ class RsyncBackup(object):
                          reverse=True)
         to_delete = []
 
-        # Remove legacy folders
-        for backup in [b for b in backups if b.interval == 'current']:
-            to_delete.append(backup)
-
         for interval in self.intervals:
             interval_backups = [b for b in backups if b.interval == interval]
             pattern = self.intervals[interval]['pattern']
@@ -690,20 +685,7 @@ class RsyncBackup(object):
             if pattern.match(backup.name):
                 return backup
 
-    def _migrate_backups(self):
-        pattern = re.compile(r'^.+_[0-9-]{17}$')
-
-        for entry in scandir.scandir(self.backup_root):
-            if pattern.match(entry.name):
-                move(entry.path, os.path.join(self.backups_dir, entry.name))
-
-        self.migrated = True
-
     def _get_backups(self):
-        if not self.migrated:
-            # Migrate backups if using old directory structure
-            self._migrate_backups()
-
         pattern = re.compile(r'^.+_[0-9-]{17}$')
 
         for entry in scandir.scandir(self.backups_dir):
