@@ -60,28 +60,6 @@ class Backup(object):
             for filename, checksum in checksums:
                 f.write(checksum + b'  ' + filename + b'\n')
 
-    @staticmethod
-    def _parse_name(name):
-        pattern = re.compile(r'^(.+)_([0-9-]{17})$')
-        m = pattern.match(name)
-        timestamp = m.group(2)
-        interval = m.group(1)
-        return (timestamp, interval)
-
-    def get_files(self, path=None):
-        if path is None:
-            path = self.backup_dir
-
-        for entry in scandir.scandir(path):
-            if entry.is_file(follow_symlinks=False):
-                yield entry.path
-            elif entry.is_dir(follow_symlinks=False):
-                for dir_file in self.get_files(entry.path):
-                    yield dir_file
-
-    def remove(self):
-        subprocess.check_call(['rm', '-rf', self.path])
-
     @property
     def checksum_file(self):
         checksum_file_legacy = os.path.join(self.path, 'checksums.md5')
@@ -96,6 +74,32 @@ class Backup(object):
             version = 1
 
         return (filename, version)
+
+    @property
+    def files(self):
+        return self._get_files()
+
+    def _get_files(self, path=None):
+        if path is None:
+            path = self.backup_dir
+
+        for entry in scandir.scandir(path):
+            if entry.is_file(follow_symlinks=False):
+                yield entry.path
+            elif entry.is_dir(follow_symlinks=False):
+                for dir_file in self._get_files(entry.path):
+                    yield dir_file
+
+    @staticmethod
+    def _parse_name(name):
+        pattern = re.compile(r'^(.+)_([0-9-]{17})$')
+        m = pattern.match(name)
+        timestamp = m.group(2)
+        interval = m.group(1)
+        return (timestamp, interval)
+
+    def remove(self):
+        subprocess.check_call(['rm', '-rf', self.path])
 
 
 class RsyncBackup(object):
@@ -586,7 +590,7 @@ class RsyncBackup(object):
         path_prefix_len = len(backup.backup_dir + b'/')
         need_checksum = {
             filename[path_prefix_len:] for filename in
-            backup.get_files()
+            backup.files
         }
 
         # Add rsync checksums to checksums and remove those files from 
