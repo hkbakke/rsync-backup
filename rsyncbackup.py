@@ -617,19 +617,20 @@ class RsyncBackup(object):
         need_checksum.difference_update(
             {filename for filename, _ in rsync_checksums})
 
+        # Add existing checksums from the previous backup if the file
+        # still exists in need_checksum
         latest_backup = self._get_latest_backup()
-        checksum_file = latest_backup.checksum_file[0]
+        reused_checksums = 0
 
-        if checksum_file:
-            # Add existing checksums from the previous backup if the file
-            # still exists in need_checksum
-            self.logger.info('Reusing unchanged checksums from %s',
-                             checksum_file)
+        for filename, checksum in latest_backup.checksums:
+            if filename in need_checksum:
+                checksums.append((filename, checksum))
+                reused_checksums += 1
+                need_checksum.discard(filename)
 
-            for filename, checksum in latest_backup.checksums:
-                if filename in need_checksum:
-                    checksums.append((filename, checksum))
-                    need_checksum.discard(filename)
+        if reused_checksums > 0:
+            self.logger.info('Reused %d unchanged checksums from %s',
+                             reused_checksums, latest_backup.checksum_file[0])
 
         # Calculate checksums for the rest of the files. There are typically
         # only files left if this is a resumed backup and these files were 
