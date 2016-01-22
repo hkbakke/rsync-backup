@@ -641,7 +641,7 @@ class RsyncBackup(object):
             {filename for filename, _ in checksums})
 
         for filename in need_checksum:
-            file_path = os.path.join(backup.backup_dir, filename)
+            file_path = os.path.join(bytes(backup.backup_dir, 'utf8'), filename)
             checksum = self._get_file_md5(file_path)
             checksums.append((filename, checksum))
 
