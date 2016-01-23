@@ -9,7 +9,7 @@ import re
 import gzip
 import scandir
 from datetime import datetime
-from shutil import move
+import shutil
 import smtplib
 from email.mime.text import MIMEText
 from functools import partial
@@ -22,11 +22,13 @@ class BackupException(Exception):
 
 class Backup(object):
     def __init__(self, path):
-        self.path = path
-        self.name = os.path.basename(path)
-        self.timestamp, self.interval = self._parse_name(self.name)
-        self.backup_dir = os.path.join(self.path, 'backup')
-        self._checksum_file = os.path.join(self.path, 'checksums.gz')
+        self.path = None
+        self.name = None
+        self.timestamp = None
+        self.interval = None
+        self.backup_dir = None
+        self._checksum_file = None
+        self._parse_path(path)
 
     @property
     def checksums(self):
@@ -90,13 +92,19 @@ class Backup(object):
                 for dir_file in self._get_files(entry.path):
                     yield dir_file
 
-    @staticmethod
-    def _parse_name(name):
+    def _parse_path(self, path):
+        name = os.path.basename(path)
         pattern = re.compile(r'^(.+)_([0-9-]{17})$')
         m = pattern.match(name)
         timestamp = m.group(2)
         interval = m.group(1)
-        return (timestamp, interval)
+
+        self.path = path
+        self.name = name
+        self.timestamp = timestamp
+        self.interval = interval
+        self.backup_dir = os.path.join(self.path, 'backup')
+        self._checksum_file = os.path.join(self.path, 'checksums.gz')
 
     @staticmethod
     def _get_file_md5(file_path):
@@ -124,6 +132,10 @@ class Backup(object):
 
     def remove(self):
         subprocess.check_call(['rm', '-rf', self.path])
+
+    def move(self, new_path):
+        shutil.move(self.path, new_path)
+        self._parse_path(new_path)
 
 
 class RsyncBackup(object):
@@ -269,7 +281,7 @@ class RsyncBackup(object):
 
                 # Extract md5 checksum from rsync output for new or
                 # changed files
-                if line.startswith(b'>'):
+                if line.startswith(b'>f'):
                     rsync_update_info = line.split(b' ', 2)
                     file_checksum = rsync_update_info[1]
                     file_path = rsync_update_info[2]
@@ -413,9 +425,46 @@ class RsyncBackup(object):
 
         self.logger.info('')
 
+    def _get_changed_files(self, old_backup, new_backup):
+        changed_files = set()
+
+        rsync = self.config.get('rsync', 'pathname', fallback='rsync')
+        rsync_command = [
+            rsync,
+            '-rtvi',
+            '--dry-run',
+            '--out-format=%i %n%L',
+            old_backup.backup_dir + os.sep,
+            new_backup.backup_dir + os.sep
+        ]
+
+        p = subprocess.Popen(rsync_command, shell=False,
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        while p.poll() is None:
+            for line in iter(p.stdout.readline, b''):
+                line = line.strip()
+
+                if line.startswith(b'>f'):
+                    rsynced_file = line.split(b' ', 1)
+                    changed_files.add(rsynced_file[1])
+
+        exit_code = p.returncode
+        if exit_code != 0:
+            raise BackupException(
+                'Rsync returned non-zero exit code [ %s ]' % exit_code)
+
+        return changed_files
+
     def _configure_rsync(self, backup):
         rsync = self.config.get('rsync', 'pathname', fallback='rsync')
-        command = [rsync, '-avihh', '--stats', '--out-format=%i %C %n%L']
+        command = [
+            rsync,
+            '-avihh',
+            '--stats',
+            '--out-format=%i %C %n%L',
+            '--delete-excluded'
+        ]
         command.extend(self.config.get('rsync', 'additional_options').split())
 
         if self.test:
@@ -447,17 +496,8 @@ class RsyncBackup(object):
             command.append('--link-dest=%s' %
                            previous_backup.backup_dir)
 
-        # Continue previously incomplete backup if available
-        incomplete_backup = self._get_incomplete_backup()
-
-        if incomplete_backup:
-            self.logger.info('Incomplete backup found in %s. Resuming...',
-                             incomplete_backup.path)
-            command.append('--delete-excluded')
-            move(incomplete_backup.path, backup.path)
-        else:
-            if not self.test:
-                self._create_dir(backup.backup_dir)
+        if not self.test:
+            self._create_dir(backup.backup_dir)
 
         command.extend([source, backup.backup_dir])
         return command
@@ -480,27 +520,46 @@ class RsyncBackup(object):
         self.status = 'Backup failed!'
         self.error = True
 
-        backup = Backup(os.path.join(self.backups_dir,
-                                    'incomplete_%s' % self.timestamp))
-        rsync_command = self._configure_rsync(backup)
+        incomplete_backup = self._get_incomplete_backup()
+        new_backup_dir = os.path.join(self.backups_dir,
+                                      'incomplete_%s' % self.timestamp)
+
+        if incomplete_backup:
+            self.logger.info('Incomplete backup found in %s. Resuming...',
+                             incomplete_backup.path)
+            backup = incomplete_backup
+            backup.move(new_backup_dir)
+        else:
+            backup = Backup(new_backup_dir)
+
         self.logger.info('Starting backup labeled \"%s\" to %s',
                          self.config.get('general', 'label'),
                          backup.backup_dir)
+        rsync_command = self._configure_rsync(backup)
         self.logger.info('Commmand: %s',
                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
 
         if not self.test:
-            checksums = self._get_checksums(backup, rsync_checksums)
+            changed_files = set()
+
+            if incomplete_backup:
+                previous_backup = self._get_latest_backup()
+
+                if previous_backup:
+                    changed_files = self._get_changed_files(previous_backup,
+                                                            backup)
+
+            checksums = self._get_checksums(backup, rsync_checksums,
+                                            changed_files)
             backup.checksums = checksums
             self.logger.info('Added %d md5 checksums to %s', len(checksums),
                              backup.checksum_file[0])
 
-        # Rename incomplete backup to current and enforce retention
         final_dest = self._get_final_dest()
 
         if not self.test:
-            move(backup.path, final_dest)
+            backup.move(final_dest)
 
         self._create_interval_backups(final_dest)
         self._remove_old_backups()
@@ -596,32 +655,32 @@ class RsyncBackup(object):
                     self.logger.info('Removing %s', old_log)
                     os.unlink(old_log)
 
-    def _get_checksums(self, backup, rsync_checksums):
+    def _get_checksums(self, backup, rsync_checksums, changed_files=None):
         self.logger.info('Getting checksums for backup files...')
         checksums = list()
-        path_prefix_len = len(bytes('%s/' % backup.backup_dir, 'utf8'))
-        need_checksum = {
-            filename[path_prefix_len:] for filename in
-            backup.files
-        }
 
-        # Add rsync checksums to checksums and remove those files from 
-        # from the set of files needing checksum
+        # Add all files in backup to a set
+        path_prefix_len = len(bytes('%s/' % backup.backup_dir, 'utf8'))
+        need_checksum = {f[path_prefix_len:] for f in backup.files}
+
+        # Add rsync checksums to checksums
         self.logger.info('Using %d checksums from rsync', len(rsync_checksums))
         checksums.extend(rsync_checksums)
-        need_checksum.difference_update(
-            {filename for filename, _ in rsync_checksums})
+        need_checksum.difference_update({f[0] for f in rsync_checksums})
 
-        # Add existing checksums from the previous backup if the file
-        # still exists in need_checksum
+        # Get existing checksummed files from the previous backup, but skip
+        # adding checksums for files we know have been changed
         latest_backup = self._get_latest_backup()
         reused_checksums = 0
 
         for filename, checksum in latest_backup.checksums:
             if filename in need_checksum:
+                if filename in changed_files:
+                    continue
+
                 checksums.append((filename, checksum))
-                reused_checksums += 1
                 need_checksum.discard(filename)
+                reused_checksums += 1
 
         if reused_checksums > 0:
             self.logger.info('Reused %d unchanged checksums from %s',
@@ -629,11 +688,9 @@ class RsyncBackup(object):
 
         # Calculate checksums for the rest of the files. There are typically
         # only files left if this is a resumed backup and these files were 
-        # transferred in the incomplete backup.
+        # transferred in a incomplete backup.
         self.logger.info('Calculating checksum for %d additional files',
                          len(need_checksum))
-        need_checksum.difference_update(
-            {filename for filename, _ in checksums})
 
         for filename in need_checksum:
             file_path = os.path.join(bytes(backup.backup_dir, 'utf8'), filename)
