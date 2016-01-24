@@ -34,27 +34,25 @@ class Backup(object):
     def checksums(self):
         checksum_file, version = self.checksum_file
 
-        if not checksum_file:
-            return []
+        if checksum_file:
+            if version == 2:
+                with gzip.open(checksum_file, 'rb') as f:
+                    for line in f:
+                        checksum, filename = line.split(None, 1)
+                        filename = filename.strip()
 
-        if version == 2:
-            with gzip.open(checksum_file, 'rb') as f:
-                for line in f:
-                    checksum, filename = line.split(None, 1)
-                    filename = filename.strip()
+                        yield (filename, checksum)
+            elif version == 1:
+                with open(checksum_file, 'rb') as f:
+                    for line in f:
+                        checksum, filename = line.split(None, 1)
+                        filename = filename.strip()
 
-                    yield (filename, checksum)
-        elif version == 1:
-            with open(checksum_file, 'rb') as f:
-                for line in f:
-                    checksum, filename = line.split(None, 1)
-                    filename = filename.strip()
+                        # Remain compatible with old checksum files
+                        if filename.startswith(b'./'):
+                            filename = filename[len(b'./'):]
 
-                    # Remain compatible with old checksum files
-                    if filename.startswith(b'./'):
-                        filename = filename[len(b'./'):]
-
-                    yield (filename, checksum)
+                        yield (filename, checksum)
 
     @checksums.setter
     def checksums(self, checksums):
@@ -120,15 +118,21 @@ class Backup(object):
         return bytes(md5.hexdigest(), 'utf8')
 
     def verify(self):
+        files = {f for f in self.files}
+
         for filename, checksum in self.checksums:
             file_path = os.path.join(bytes(self.backup_dir, 'utf8'), filename)
             current_checksum = self.get_checksum(file_path)
+            files.discard(file_path)
             verified = False
 
             if current_checksum == checksum:
                 verified = True
 
             yield (file_path, verified)
+
+        for file_path in files:
+            yield (file_path, None)
 
     def remove(self):
         subprocess.check_call(['rm', '-rf', self.path])
@@ -367,24 +371,21 @@ class RsyncBackup(object):
 
         self.logger.info('Initializing checksum verification for %s',
                          backup.path)
-        checksum_file = backup.checksum_file[0]
 
-        if not checksum_file:
-            raise BackupException(
-                'There is no checksum file to verify for this backup')
-
-        self.logger.info('Selected checksum file: %s', checksum_file)
         self.logger.info('Starting backup verification...')
         checked_count = 0
         verified_count = 0
         failed_count = 0
-        failed_files = list()
+        missing_count = 0
 
         for file_path, verified in backup.verify():
             checked_count += 1
 
             if verified:
                 verified_count += 1
+            elif verified is None:
+                missing_count += 1
+                self.logger.error('[CHECKSUM MISSING] %s', file_path)
             else:
                 failed_count += 1
                 self.logger.error('[FAILED] %s', file_path)
@@ -395,10 +396,13 @@ class RsyncBackup(object):
         stats.extend([('Files checked', checked_count)])
         stats.extend([('Successful verifications', verified_count)])
         stats.extend([('Failed verifications', failed_count)])
+        stats.extend([('Files missing checksum', missing_count)])
         self._display_verification_stats(stats)
 
         if failed_count != 0:
             self.logger.error('Backup verification failed!')
+        elif missing_count != 0:
+            self.logger.error('Backup contains files without stored checksum')
         else:
             self.status = 'Backup verification completed successfully!'
             self.logger.info(self.status)
