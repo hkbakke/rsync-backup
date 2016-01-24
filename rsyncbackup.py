@@ -543,10 +543,8 @@ class RsyncBackup(object):
             self.logger.info('Added %d md5 checksums to %s', len(checksums),
                              backup.checksum_file[0])
 
-        final_dest = self._get_final_dest()
-
         if not self.test:
-            backup.move(final_dest)
+            backup.move(self._get_final_dest())
 
         self._create_interval_backups(backup)
         self._remove_old_backups()
