@@ -307,10 +307,15 @@ class RsyncBackup(object):
             f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     def _create_dirs(self):
-        self._create_dir(self.backup_root)
-        self._create_dir(self.backups_dir)
-        self._create_dir(self.log_dir)
-        self._create_dir(self.cache_dir)
+        dirs = [
+            self.backup_root,
+            self.backups_dir,
+            self.log_dir,
+            self.cache_dir
+        ]
+
+        for d in dirs:
+            self._create_dir(d)
 
     def _prepare_logging(self):
         std_format = logging.Formatter(
