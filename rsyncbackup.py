@@ -332,13 +332,14 @@ class RsyncBackup(object):
                                 'This is NOT recommended!')
             return
 
-        last_verified = self._get_timestamp(
-            self.last_verification_file)
+        last_verified = self._get_timestamp(self.last_verification_file)
+
         if not last_verified:
             self._write_timestamp(self.last_verification_file)
             return
 
         days_since_verification = (datetime.now() - last_verified).days
+
         if (days_since_verification > interval):
             self.logger.info('At least %d days have passed since the backup '
                              'was last verified. Initializing verification...',
