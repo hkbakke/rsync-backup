@@ -107,7 +107,7 @@ class Backup(object):
         self._checksum_file = os.path.join(self.path, 'checksums.gz')
 
     @staticmethod
-    def _get_file_md5(file_path):
+    def get_checksum(file_path):
         """
         Return bytes instead of a string as bytes is used in all other checksum
         file operations as filenames are bytes without encoding in Linux.
@@ -122,7 +122,7 @@ class Backup(object):
     def verify(self):
         for filename, checksum in self.checksums:
             file_path = os.path.join(bytes(self.backup_dir, 'utf8'), filename)
-            current_checksum = self._get_file_md5(file_path)
+            current_checksum = self.get_checksum(file_path)
             verified = False
 
             if current_checksum == checksum:
@@ -232,19 +232,6 @@ class RsyncBackup(object):
 
         if self.pid_created:
             os.remove(self.pidfile)
-
-    @staticmethod
-    def _get_file_md5(file_path):
-        """
-        Return bytes instead of a string as bytes is used in all other checksum
-        file operations as filenames are bytes without encoding in Linux.
-        """
-        md5 = hashlib.md5()
-        chunksize = 128*512
-        with open(file_path, 'rb') as f:
-            for chunk in iter(partial(f.read, chunksize), b''):
-                md5.update(chunk)
-        return bytes(md5.hexdigest(), 'utf8')
 
     @staticmethod
     def _create_dir(directory):
@@ -694,7 +681,7 @@ class RsyncBackup(object):
 
         for filename in need_checksum:
             file_path = os.path.join(bytes(backup.backup_dir, 'utf8'), filename)
-            checksum = self._get_file_md5(file_path)
+            checksum = backup.get_checksum(file_path)
             checksums.append((filename, checksum))
 
         return checksums
