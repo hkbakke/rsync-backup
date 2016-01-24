@@ -548,7 +548,7 @@ class RsyncBackup(object):
         if not self.test:
             backup.move(final_dest)
 
-        self._create_interval_backups(final_dest)
+        self._create_interval_backups(backup)
         self._remove_old_backups()
         self._remove_old_logs()
 
@@ -560,7 +560,7 @@ class RsyncBackup(object):
         self.logger.info(self.status)
         self.error = False
 
-    def _create_interval_backups(self, source_backup):
+    def _create_interval_backups(self, backup):
         for interval in self.intervals:
             if interval == 'custom':
                 continue
@@ -575,18 +575,21 @@ class RsyncBackup(object):
             if already_existing:
                 continue
 
-            interval_backup = os.path.join(self.backups_dir,
-                                           '%s_%s' % (interval, self.timestamp))
+            path = os.path.join(self.backups_dir,
+                                '%s_%s' % (interval, self.timestamp))
+            interval_backup = Backup(path)
+
 
             if self.test:
-                self.logger.info('Creating %s (DRY RUN)', interval_backup)
+                self.logger.info('Creating %s (DRY RUN)', interval_backup.path)
             else:
-                self.logger.info('Creating %s', interval_backup)
+                self.logger.info('Creating %s', interval_backup.path)
 
                 # Use cp instead of copytree because of performance reasons
-                #copytree(source_backup, interval_backup, copy_function=os.link)
+                #copytree(backup.path, interval_backup.path,
+                #         copy_function=os.link)
                 subprocess.check_call([
-                    'cp', '-al', source_backup, interval_backup
+                    'cp', '-al', backup.path, interval_backup.path
                 ])
 
     def _remove_old_backups(self):
