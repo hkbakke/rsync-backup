@@ -1,7 +1,6 @@
 import configparser
 import logging
 import os
-import fnmatch
 import sys
 import hashlib
 import subprocess
@@ -89,6 +88,10 @@ class Backup(object):
             elif entry.is_dir(follow_symlinks=False):
                 for dir_file in self._get_files(entry.path):
                     yield dir_file
+
+    @property
+    def datetime(self):
+        return datetime.strptime(self.timestamp, '%Y-%m-%d-%H%M%S')
 
     def _parse_path(self, path):
         name = os.path.basename(path)
@@ -190,26 +193,25 @@ class RsyncBackup(object):
 
         # Configure backup intervals
         self.intervals = {
-            'custom': {
-                'pattern': '%s-*' % current_datetime.strftime('%Y-%m-%d')
+            'snapshot': {
+                'retention': self.config.getint(
+                    'retention', 'snapshot',
+                    fallback=self.global_config.getint('retention', 'snapshot')),
             },
             'daily': {
                 'retention': self.config.getint(
                     'retention', 'daily',
                     fallback=self.global_config.getint('retention', 'daily')),
-                'pattern': '%s-*' % current_datetime.strftime('%Y-%m-%d')
             },
             'monthly': {
                 'retention': self.config.getint(
                     'retention', 'monthly',
                     fallback=self.global_config.getint('retention', 'monthly')),
-                'pattern': '%s-*' % current_datetime.strftime('%Y-%m')
             },
             'yearly': {
                 'retention': self.config.getint(
                     'retention', 'yearly',
                     fallback=self.global_config.getint('retention', 'yearly')),
-                'pattern': '%s-*' % current_datetime.strftime('%Y')
             }
         }
 
@@ -499,20 +501,6 @@ class RsyncBackup(object):
         command.extend([source, backup.backup_dir])
         return command
 
-    def _get_final_dest(self):
-        current_daily = fnmatch.filter(
-            [b.path for b in self._get_backups() if b.interval == 'daily'],
-            '*_%s' % self.intervals['daily']['pattern'])
-
-        if current_daily:
-            final_dest = os.path.join(self.backups_dir,
-                                      'custom_%s' % self.timestamp)
-        else:
-            final_dest = os.path.join(self.backups_dir,
-                                      'daily_%s' % self.timestamp)
-
-        return final_dest
-
     def backup(self):
         self.status = 'Backup failed!'
         self.error = True
@@ -554,7 +542,8 @@ class RsyncBackup(object):
                              backup.checksum_file[0])
 
         if not self.test:
-            backup.move(self._get_final_dest())
+            backup.move(os.path.join(self.backups_dir,
+                                     'snapshot_%s' % self.timestamp))
 
         self._create_interval_backups(backup)
         self._remove_old_backups()
@@ -569,59 +558,66 @@ class RsyncBackup(object):
         self.error = False
 
     def _create_interval_backups(self, backup):
+        now = datetime.now()
+        skip_create = set()
+
+        for interval_backup in self._get_backups():
+            interval = interval_backup.interval
+            backup_date = interval_backup.datetime
+
+            if interval == 'yearly':
+                if backup_date.year == now.year:
+                    skip_create.add(interval)
+            elif interval == 'monthly':
+                if (backup_date.year == now.year and
+                        backup_date.month == now.month):
+                    skip_create.add(interval)
+            elif interval == 'daily':
+                if (backup_date.year == now.year and
+                        backup_date.month == now.month and
+                        backup_date.day == now.day):
+                    skip_create.add(interval)
+
         for interval in self.intervals:
-            if interval == 'custom':
+            if interval == 'snapshot':
+                continue
+
+            if interval in skip_create:
                 continue
 
             if self.intervals[interval]['retention'] < 1:
                 continue
 
-            already_existing = fnmatch.filter(
-                [b.path for b in self._get_backups() if b.interval == interval],
-                '*_%s' % self.intervals[interval]['pattern'])
-
-            if already_existing:
-                continue
-
             path = os.path.join(self.backups_dir,
-                                '%s_%s' % (interval, self.timestamp))
-            interval_backup = Backup(path)
-
+                                '%s_%s' % (interval, backup.timestamp))
 
             if self.test:
-                self.logger.info('Creating %s (DRY RUN)', interval_backup.path)
+                self.logger.info('Creating %s (DRY RUN)', path)
             else:
-                self.logger.info('Creating %s', interval_backup.path)
+                self.logger.info('Creating %s', path)
 
                 # Use cp instead of copytree because of performance reasons
-                #copytree(backup.path, interval_backup.path,
-                #         copy_function=os.link)
+                #copytree(backup.path, path, copy_function=os.link)
                 subprocess.check_call([
-                    'cp', '-al', backup.path, interval_backup.path
+                    'cp', '-al', backup.path, path
                 ])
 
     def _remove_old_backups(self):
         self.logger.info('Removing old backups...')
-        backups = sorted(self._get_backups(), key=attrgetter('timestamp'),
-                         reverse=True)
         to_delete = []
+        now = datetime.now()
 
-        for interval in self.intervals:
-            interval_backups = [b for b in backups if b.interval == interval]
-            pattern = self.intervals[interval]['pattern']
+        for backup in self._get_backups():
+            interval = backup.interval
 
-            if interval == 'custom':
-                for backup in interval_backups:
-                    m = fnmatch.fnmatch(backup.name,
-                                        '%s_%s' % (interval, pattern))
+            if interval not in self.intervals:
+                to_delete.append(backup)
+                continue
 
-                    if not m:
-                        to_delete.append(backup)
-            else:
-                retention = self.intervals[interval]['retention']
+            max_age = self.intervals[interval]['retention']
 
-                for backup in interval_backups[retention:]:
-                    to_delete.append(backup)
+            if (now - backup.datetime).days >= max_age:
+                to_delete.append(backup)
 
         for backup in to_delete:
             if self.test:
