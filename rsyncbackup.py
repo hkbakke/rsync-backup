@@ -401,10 +401,8 @@ class RsyncBackup(object):
         stats.extend([('Files missing checksum', missing_count)])
         self._display_verification_stats(stats)
 
-        if failed_count != 0:
+        if failed_count != 0 or missing_count != 0:
             self.logger.error('Backup verification failed!')
-        elif missing_count != 0:
-            self.logger.error('Backup contains files without stored checksum')
         else:
             self.status = 'Backup verification completed successfully!'
             self.logger.info(self.status)
