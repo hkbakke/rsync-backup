@@ -304,10 +304,10 @@ class RsyncBackup(object):
 
     def _write_timestamp(self, file_path):
         if self.test:
-            self.logger.info('Updating timestamp in %s (DRY RUN)', file_path)
+            self.logger.debug('Updating timestamp in %s (DRY RUN)', file_path)
             return
 
-        self.logger.info('Updating timestamp in %s', file_path)
+        self.logger.debug('Updating timestamp in %s', file_path)
 
         with open(file_path, 'w') as f:
             f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -519,8 +519,8 @@ class RsyncBackup(object):
                          self.config.get('general', 'label'),
                          backup.backup_dir)
         rsync_command = self._configure_rsync(backup)
-        self.logger.info('Commmand: %s',
-                         ' '.join(element for element in rsync_command))
+        self.logger.debug('Command: %s',
+                          ' '.join(element for element in rsync_command))
         rsync_checksums = self._run_rsync(rsync_command)
 
         if not self.test:
@@ -619,9 +619,9 @@ class RsyncBackup(object):
 
         for backup in to_delete:
             if self.test:
-                self.logger.info('Removing %s (DRY RUN)', backup.path)
+                self.logger.debug('Removing %s (DRY RUN)', backup.path)
             else:
-                self.logger.info('Removing %s', backup.path)
+                self.logger.debug('Removing %s', backup.path)
                 backup.remove()
 
     def _remove_old_logs(self):
@@ -642,9 +642,9 @@ class RsyncBackup(object):
             log_datetime = self._get_log_file_datetime(old_log)
             if (datetime.now() - log_datetime).days > retention:
                 if self.test:
-                    self.logger.info('Removing %s (DRY RUN)', old_log)
+                    self.logger.debug('Removing %s (DRY RUN)', old_log)
                 else:
-                    self.logger.info('Removing %s', old_log)
+                    self.logger.debug('Removing %s', old_log)
                     os.unlink(old_log)
 
     def _get_checksums(self, backup, rsync_checksums, changed_files=None):
@@ -656,7 +656,7 @@ class RsyncBackup(object):
         need_checksum = {f[path_prefix_len:] for f in backup.files}
 
         # Add rsync checksums to checksums
-        self.logger.info('Using %d checksums from rsync', len(rsync_checksums))
+        self.logger.debug('Using %d checksums from rsync', len(rsync_checksums))
         checksums.extend(rsync_checksums)
         need_checksum.difference_update({f[0] for f in rsync_checksums})
 
@@ -675,13 +675,13 @@ class RsyncBackup(object):
                 reused_checksums += 1
 
         if reused_checksums > 0:
-            self.logger.info('Reused %d unchanged checksums from %s',
-                             reused_checksums, latest_backup.checksum_file[0])
+            self.logger.debug('Reused %d unchanged checksums from %s',
+                              reused_checksums, latest_backup.checksum_file[0])
 
         # Calculate checksums for the rest of the files. There are typically
         # only files left if this is a resumed backup and these files were 
         # transferred in a incomplete backup.
-        self.logger.info('Calculating checksum for %d additional files',
+        self.logger.debug('Calculating checksum for %d additional files',
                          len(need_checksum))
 
         for filename in need_checksum:
