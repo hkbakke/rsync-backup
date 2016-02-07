@@ -10,7 +10,7 @@ the need for extra storage when doing versioned backups. Rsync only copies
 changed blocks, so network backups are efficient and fast after the initial
 backup.
 
-rsync-backup implements a configurable current, daily, monthly and yearly
+rsync-backup implements a configurable snapshot, daily, monthly and yearly
 scheme to reduce the number of backups when long retention times are
 used. The storage requirements are also reduced when using such a scheme
 compared to rolling backups with no efficient trimming of older backups.
@@ -29,7 +29,7 @@ The backup's checksum file is stored in each backup folder and is generated in
 a md5sum compatible way, so the folder structure can easily be verified with
 md5sum if the backup script is not available or the backup is moved.
 
-The current backup is automatically verified within a user defined interval, 
+The latest backup is automatically verified within a user defined interval, 
 and every backup can also be verified at will.
 
 ## Requirements
@@ -62,7 +62,7 @@ Run all configured backups:
 Run a specific backup configuration:
 
     ./backup.py -c <config>
-Verify the current backup:
+Verify the latest backup:
 
     ./backup.py -c <config> -i
 Verify a specific backup:
