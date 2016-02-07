@@ -95,7 +95,7 @@ like this:
 Build:
 
     cd </path/to/rsync-backup>
-    docker build -t rsync-backup .
+    docker build -t rsync-backup --rm=true .
 Running rsync-backup:
 
     docker run -i -t --rm \
