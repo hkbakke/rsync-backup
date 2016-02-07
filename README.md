@@ -35,7 +35,7 @@ and every backup can also be verified at will.
 ## Requirements
 * Rsync >= 3.1.0
 * Python >= 3.2 (only tested with 3.4 and higher)
-* scandir module (os.scandir() can be used when python 3.5 becomes widely used)
+* If python > 3.5: scandir module from PyPI
 
 ## Usage
 ### Configure SSH-keys
