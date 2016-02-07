@@ -6,13 +6,17 @@ import hashlib
 import subprocess
 import re
 import gzip
-import scandir
 from datetime import datetime
 import shutil
 import smtplib
 from email.mime.text import MIMEText
 from functools import partial
 from operator import attrgetter
+
+try:
+    from os import scandir as scandir
+except ImportError:
+    from scandir import scandir as scandir
 
 
 class BackupException(Exception):
@@ -82,7 +86,7 @@ class Backup(object):
         if path is None:
             path = bytes(self.backup_dir, 'utf8')
 
-        for entry in scandir.scandir(path):
+        for entry in scandir(path):
             if entry.is_file(follow_symlinks=False):
                 yield entry.path
             elif entry.is_dir(follow_symlinks=False):
@@ -737,14 +741,14 @@ class RsyncBackup(object):
     def _get_backups(self):
         pattern = re.compile(r'^.+_[0-9-]{17}$')
 
-        for entry in scandir.scandir(self.backups_dir):
+        for entry in scandir(self.backups_dir):
             if pattern.match(entry.name):
                 yield Backup(entry.path)
 
     def _get_logs(self):
         pattern = re.compile(r'^[0-9-]{17}.log$')
 
-        for entry in scandir.scandir(self.log_dir):
+        for entry in scandir(self.log_dir):
             if pattern.match(entry.name):
                 yield entry.path
 

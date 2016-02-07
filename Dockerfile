@@ -1,13 +1,9 @@
-FROM debian:latest
+FROM debian:stretch
 
 RUN apt-get update && apt-get install -y \
     openssh-client \
     rsync \
-    python3 \
-    python3-pip \
-    python3-dev
-
-RUN pip3 install scandir
+    python3
 
 COPY . /root/rsync-backup
 
