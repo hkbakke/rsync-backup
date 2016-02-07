@@ -1,5 +1,5 @@
 # Ignore configuration files used for testing
-/conf.d/*.conf
-/conf.d/*.rules
-/rsync-backup.conf
-/__pycache__/
+rsync-backup/conf.d/*.conf
+rsync-backup/conf.d/*.rules
+rsync-backup/rsync-backup.conf
+rsync-backup/__pycache__/
