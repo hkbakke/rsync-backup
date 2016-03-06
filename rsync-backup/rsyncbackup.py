@@ -328,12 +328,12 @@ class RsyncBackup(object):
             self._create_dir(d)
 
     def _prepare_logging(self):
-        std_format = logging.Formatter(
+        fmt = logging.Formatter(
             '%(asctime)s [%(levelname)s] %(message)s')
 
         # Create file handler for logging to file
         fh = logging.FileHandler(self.log_file)
-        fh.setFormatter(std_format)
+        fh.setFormatter(fmt)
         self.logger.addHandler(fh)
 
     def schedule_verification(self):

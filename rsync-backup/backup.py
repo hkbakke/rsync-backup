@@ -70,10 +70,10 @@ def main():
     args = parser.parse_args()
 
     if not args.quiet:
-        std_format = logging.Formatter('[%(name)s] [%(levelname)s] %(message)s')
+        fmt = logging.Formatter('[%(name)s] [%(levelname)s] %(message)s')
 
         ch = logging.StreamHandler()
-        ch.setFormatter(std_format)
+        ch.setFormatter(fmt)
         ch.setLevel(args.log_level)
         logger.addHandler(ch)
 
