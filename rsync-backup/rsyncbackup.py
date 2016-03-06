@@ -608,6 +608,7 @@ class RsyncBackup(object):
         self.logger.info('Removing old backups...')
         to_delete = []
         now = datetime.now()
+        snapshots = []
 
         for backup in self._get_backups():
             interval = backup.interval
@@ -615,11 +616,24 @@ class RsyncBackup(object):
             if interval not in self.intervals:
                 to_delete.append(backup)
                 continue
-
-            max_age = self.intervals[interval]['retention']
+            elif interval == 'snapshot':
+                snapshots.append(backup)
+                continue
+            elif interval == 'daily':
+                max_age = self.intervals[interval]['retention']
+            elif interval == 'monthly':
+                max_age = self.intervals[interval]['retention'] * 365.25 / 12
+            elif interval == 'yearly':
+                max_age = self.intervals[interval]['retention'] * 365.25
 
             if (now - backup.datetime).days >= max_age:
                 to_delete.append(backup)
+
+        # Use counts, not days, to enforce retention for snapshots
+        snapshots_sorted = sorted(snapshots, key=attrgetter('timestamp'),
+                                  reverse=True)
+        for backup in snapshots_sorted[self.intervals['snapshot']['retention']:]:
+            to_delete.append(backup)
 
         for backup in to_delete:
             if self.test:

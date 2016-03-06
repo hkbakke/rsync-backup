@@ -41,13 +41,9 @@ report_interval = 7
 
 [retention]
 
-# Set value to 0 to disable a retention category
-
-# Default retention values in days
-snapshot = 1
-daily = 30
-monthly = 1095
-yearly = 1825
-
-# Default number of days to keep log files
-logs = 365
+# Default retention values. Set value to 0 to disable a retention category.
+snapshot = 1    # count
+daily = 31      # days
+monthly = 12    # months
+yearly = 5      # years
+logs = 365      # days

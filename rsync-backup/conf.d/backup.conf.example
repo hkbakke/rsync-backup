@@ -47,8 +47,8 @@ ssh_key = /root/.ssh/backup
 [retention]
 
 # Uncomment to override global values
-#snapshot = 1
-#daily = 30
-#monthly = 1095
-#yearly = 1825
-#logs = 365
+#snapshot = 1    # count
+#daily = 31      # days
+#monthly = 12    # months
+#yearly = 5      # years
+#logs = 365      # days
