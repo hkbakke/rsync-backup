@@ -294,7 +294,11 @@ class RsyncBackup(object):
     @staticmethod
     def _get_end_status(log_file):
         with open(log_file, 'r') as f:
-            lastline = f.readlines()[-1]
+            try:
+                lastline = f.readlines()[-1]
+            except IndexError:
+                return 'Unknown status'
+
             if 'END STATUS:' in lastline:
                 return lastline.split('END STATUS: ')[1].strip()
             else:
