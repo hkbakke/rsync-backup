@@ -12,9 +12,13 @@ import rsyncbackup
 logger = logging.getLogger()
 
 
-def init_backup(config_name, test, verify):
+def init_worker():
+    # This may seem strange, but if I don't ignore SIGTERM the pool
+    # terminates the child processes on KeyboardInterrupts without performing
+    # cleanups and final status reporting.
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
+def run_backup(config_name, test, verify):
     try:
         with rsyncbackup.RsyncBackup(config_name, test) as backup:
             if verify:
@@ -22,9 +26,14 @@ def init_backup(config_name, test, verify):
             else:
                 backup.backup()
                 backup.schedule_verification()
+    except SystemExit:
+        # This is mainly needed to exit if already running. For some reason
+        # the SystemExit exception does not work here and the process just 
+        # hangs without exiting after the worker has called sys.exit()
+        pass
     except KeyboardInterrupt:
+        # Avoid ugly exception message and exit cleanly
         sys.exit(2)
-
 
 def get_all_configs():
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -77,20 +86,23 @@ def main():
         ch.setLevel(args.log_level)
         logger.addHandler(ch)
 
-    if args.backup_all:
-        workers = args.processes if args.processes else 2
+    workers = args.processes if args.processes else 2
+    configs = list()
 
-        try:
-            with Pool(processes=workers) as pool:
-                for conf in get_all_configs():
-                    pool.apply_async(init_backup,
-                                     args=(conf, args.test, args.verify))
-                pool.close()
-                pool.join()
-        except KeyboardInterrupt:
-            sys.exit(2)
+    if args.backup_all:
+        configs = get_all_configs()
     elif args.config_name:
-        init_backup(args.config_name, args.test, args.verify)
+        configs = [args.config_name]
+
+    try:
+        with Pool(workers, init_worker) as pool:
+            for conf in configs:
+                pool.apply_async(run_backup,
+                                 args=(conf, args.test, args.verify))
+            pool.close()
+            pool.join()
+    except KeyboardInterrupt:
+        sys.exit(2)
 
 
 if __name__ == '__main__':
