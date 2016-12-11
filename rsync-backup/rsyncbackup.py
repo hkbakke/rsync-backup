@@ -285,7 +285,11 @@ class RsyncBackup(object):
                     checksums.append((file_path, file_checksum))
 
         exit_code = p.returncode
-        if exit_code != 0:
+        if exit_code == 24:
+            self.logger.warning('Ignoring rsync exit code %s (Partial '
+                                'transfer due to vanished source files)',
+                                exit_code)
+        elif exit_code != 0:
             raise BackupException(
                 'Rsync returned non-zero exit code [ %s ]' % exit_code)
 
