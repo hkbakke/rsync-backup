@@ -555,6 +555,18 @@ class RsyncBackup(object):
             backup.move(os.path.join(self.backups_dir,
                                      'snapshot_%s' % self.timestamp))
 
+            # Update a symlink named 'current' that always points to the latest
+            # backup just for user friendliness.
+            # This is not done atomically so do not rely on the continuous
+            # existence of this symlink.
+            current = os.path.join(self.backups_dir, 'current')
+            if os.path.islink(current):
+                os.unlink(current)
+
+            self.logger.debug('Updating %s symlink to point to %s', current,
+                              backup.path)
+            os.symlink(backup.path, current)
+
         self._create_interval_backups(backup)
         self._remove_old_backups()
         self._remove_old_logs()
