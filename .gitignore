@@ -3,3 +3,4 @@ rsync-backup/conf.d/*.conf
 rsync-backup/conf.d/*.rules
 rsync-backup/rsync-backup.conf
 rsync-backup/__pycache__/
+venv/
