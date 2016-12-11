@@ -34,6 +34,8 @@ def run_backup(config_name, test, verify):
     except KeyboardInterrupt:
         # Avoid ugly exception message and exit cleanly
         sys.exit(2)
+    except:
+        logger.exception('Backup initialization error')
 
 def get_all_configs():
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
