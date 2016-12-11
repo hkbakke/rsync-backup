@@ -28,7 +28,7 @@ def run_backup(config_name, test, verify):
                 backup.schedule_verification()
     except SystemExit:
         # This is mainly needed to exit if already running. For some reason
-        # the SystemExit exception does not work here and the process just 
+        # the SystemExit exception does not work here and the process just
         # hangs without exiting after the worker has called sys.exit()
         pass
     except KeyboardInterrupt:
@@ -37,7 +37,7 @@ def run_backup(config_name, test, verify):
 
 def get_all_configs():
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    conf_dir = os.path.join(script_dir, 'conf.d')             
+    conf_dir = os.path.join(script_dir, 'conf.d')
 
     for conf in os.listdir(conf_dir):
         if fnmatch.fnmatch(conf, '*.conf'):
