@@ -18,12 +18,12 @@ label = example
 # local: use this when you are going to backup a local directory
 mode = ssh
 
-# The directory you want to backup. Note that paths in the rules file are 
+# The directory you want to backup. Note that paths in the rules file are
 # relative to this directory.
 source_dir = /
 
 # Set some additional rsync options here if needed
-additional_options = --numeric-ids --partial-dir=.rsync-partial --timeout=600
+additional_options = --numeric-ids --partial-dir=.rsync-partial --timeout=600 --acls --xattrs --hard-links
 
 # IP/name of the computer to backup. Ignored if rsync_mode is local
 source_host = ${general:label}

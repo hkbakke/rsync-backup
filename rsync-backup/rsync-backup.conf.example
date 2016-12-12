@@ -3,14 +3,14 @@
 # The folder to put all backups in
 backup_root = /srv/rsync-backup
 
-# By default permissions are restricted to the current user for all files 
-# created by this script. This will not affect the backup itself if rsync is 
+# By default permissions are restricted to the current user for all files
+# created by this script. This will not affect the backup itself if rsync is
 # configured to sync permissions and/or ACLs.
 #umask = 0o077
 
-# Set the default number of days between automatic backup verifications based 
+# Set the default number of days between automatic backup verifications based
 # on the calculated checksums. Only the last backup will be verified
-# automatically, but as files are mostly hardlinked this should be sufficient 
+# automatically, but as files are mostly hardlinked this should be sufficient
 # in most cases. Set to 0 to disable (not recommended).
 verification_interval = 7
 
