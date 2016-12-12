@@ -51,6 +51,8 @@ def main():
         description='Rsync based backup with checksumming and reporting.')
 
     me_group = parser.add_mutually_exclusive_group(required=True)
+    me_group.add_argument('-V', '--version', help='Display version',
+                        action='store_true')
     me_group.add_argument('-a', '--backup-all',
                           help='Run all configured backups.',
                           action='store_true')
@@ -79,6 +81,12 @@ def main():
                         default='DEBUG',
                         help='Set log level for console output.')
     args = parser.parse_args()
+
+    VERSION = '2.1.1'
+
+    if args.version:
+        print('rsync-backup v%s' % VERSION)
+        sys.exit(0)
 
     if not args.quiet:
         fmt = logging.Formatter('[%(name)s] [%(levelname)s] %(message)s')
