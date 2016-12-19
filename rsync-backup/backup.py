@@ -92,7 +92,7 @@ def main():
         fmt = logging.Formatter('[%(name)s] [%(levelname)s] %(message)s')
         ch = logging.StreamHandler()
         ch.setFormatter(fmt)
-        logger.setLevel(args.log_level)
+        ch.setLevel(args.log_level)
         logger.addHandler(ch)
 
     workers = args.processes if args.processes else 2
