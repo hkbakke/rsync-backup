@@ -90,10 +90,9 @@ def main():
 
     if not args.quiet:
         fmt = logging.Formatter('[%(name)s] [%(levelname)s] %(message)s')
-
         ch = logging.StreamHandler()
         ch.setFormatter(fmt)
-        ch.setLevel(args.log_level)
+        logger.setLevel(args.log_level)
         logger.addHandler(ch)
 
     workers = args.processes if args.processes else 2

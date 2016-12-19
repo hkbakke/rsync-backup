@@ -24,7 +24,8 @@ class BackupException(Exception):
 
 
 class Backup(object):
-    def __init__(self, path):
+    def __init__(self, path, logger):
+        self.logger = logger
         self.path = None
         self.name = None
         self.timestamp = None
@@ -140,6 +141,22 @@ class Backup(object):
 
         for file_path in files:
             yield (file_path, None)
+
+    def set_current(self):
+        """
+        Update a symlink named 'current' that always points to the latest
+        backup just for user friendliness.
+        This is not done atomically so do not rely on the continuous
+        existence of this symlink.
+        """
+        current = os.path.join(os.path.dirname(self.path), 'current')
+
+        if os.path.islink(current):
+            os.unlink(current)
+
+        link_src = os.path.basename(self.path)
+        self.logger.debug('Pointing "current" symlink to %s', link_src)
+        os.symlink(link_src, current)
 
     def remove(self):
         subprocess.check_call(['rm', '-rf', self.path])
@@ -525,7 +542,7 @@ class RsyncBackup(object):
             backup = incomplete_backup
             backup.move(new_backup_dir)
         else:
-            backup = Backup(new_backup_dir)
+            backup = Backup(new_backup_dir, self.logger)
 
         self.logger.info('Starting backup labeled \"%s\" to %s',
                          self.config.get('general', 'label'),
@@ -554,18 +571,7 @@ class RsyncBackup(object):
         if not self.test:
             backup.move(os.path.join(self.backups_dir,
                                      'snapshot_%s' % self.timestamp))
-
-            # Update a symlink named 'current' that always points to the latest
-            # backup just for user friendliness.
-            # This is not done atomically so do not rely on the continuous
-            # existence of this symlink.
-            current = os.path.join(self.backups_dir, 'current')
-            if os.path.islink(current):
-                os.unlink(current)
-
-            self.logger.debug('Updating %s symlink to point to %s', current,
-                              backup.path)
-            os.symlink(backup.path, current)
+            backup.set_current()
 
         self._create_interval_backups(backup)
         self._remove_old_backups()
@@ -777,7 +783,7 @@ class RsyncBackup(object):
 
         for entry in scandir(self.backups_dir):
             if pattern.match(entry.name):
-                yield Backup(entry.path)
+                yield Backup(entry.path, self.logger)
 
     def _get_logs(self):
         pattern = re.compile(r'^[0-9-]{17}.log$')
@@ -802,7 +808,7 @@ class RsyncBackup(object):
                 'backup, not a path')
 
         path = os.path.join(self.backups_dir, backup_name)
-        backup = Backup(path)
+        backup = Backup(path, self.logger)
 
         if not os.path.isdir(backup.backup_dir):
             backup = None
