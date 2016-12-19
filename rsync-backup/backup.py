@@ -82,7 +82,7 @@ def main():
                         help='Set log level for console output.')
     args = parser.parse_args()
 
-    VERSION = '2.1.2'
+    VERSION = '2.1.3'
 
     if args.version:
         print('rsync-backup v%s' % VERSION)
