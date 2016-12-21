@@ -17,8 +17,8 @@ compared to rolling backups with no efficient trimming of older backups.
 
 ## Checksum validation
 rsync-backup grabs the internal checksums rsync is generating when transferring
-new files to avoid having to calculate the checksums manually. It also 
-reuses all checksums for unchanged files from the previous backup, so in most 
+new files to avoid having to calculate the checksums manually. It also
+reuses all checksums for unchanged files from the previous backup, so in most
 cases no additional work is needed for a backup.
 It is however smart enough to detect if some files are missing its checksum
 and manually calculates the checksum for these files.
@@ -27,9 +27,9 @@ resumed.
 
 The backup's checksum file is stored in each backup folder and is generated in
 a md5sum compatible way, so the folder structure can easily be verified with
-md5sum if the backup script is not available or the backup is moved.
+md5sum if the rsync-backup script is not available or the backup is moved.
 
-The latest backup is automatically verified within a user defined interval, 
+The latest backup is automatically verified within a user defined interval,
 and every backup can also be verified at will.
 
 ## Requirements
@@ -39,7 +39,7 @@ and every backup can also be verified at will.
 
 ## Usage
 ### Configure SSH-keys
-Generate a SSH key pair for backups and place the public key in 
+Generate a SSH key pair for backups and place the public key in
 `~/.ssh/authorized_keys` for the backup user on the source host.
 Configure the path to the private key in the backup configuration file.
 
@@ -73,13 +73,17 @@ Dry run backup:
     ./backup.py -c <config> -t
 Additional features:
 
-    ./backup.py --help 
+    ./backup.py --help
+Manually verify backup without using rsync-backup:
+
+	cd /path/to/backups/<label>/backups/<backup>/backup
+	zcat ../checksums.gz | md5sum -c
 
 ### Note about parallel backups
 By default rsync-backup is doing 2 backups in parallel when not specifying a
 specific backup to prevent a single long running backup from blocking all
 other backups from running. The number of parallel processes can be configured
-with the `-p N` argument. Parallel runs will cause the log output from the 
+with the `-p N` argument. Parallel runs will cause the log output from the
 different backups to interleave with each other as they are printed to the
 screen. If this is not acceptable you can disable the parallelization by
 setting `-p 1`, effectively making rsync-backup process the backups
@@ -104,7 +108,7 @@ Running rsync-backup:
         -v "<host_ssh_dir>":"/root/.ssh" \
         rsync-backup <backup_args>
 
-The volume `host_ssh_dir` needs to hold the private key and will also have the 
-`known_hosts` file to avoid having to confirm new SSH host keys for every 
+The volume `host_ssh_dir` needs to hold the private key and will also have the
+`known_hosts` file to avoid having to confirm new SSH host keys for every
 container run. This directory should be dedicated to the docker container, and
 not pointed to i.e. the host's `/root/.ssh` folder.
