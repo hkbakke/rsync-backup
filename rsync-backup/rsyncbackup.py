@@ -854,7 +854,7 @@ Summary
             summary)
 
         msg = MIMEText(msgtext, 'plain')
-        msg['Subject'] = '%s [%s: %s]' % (
+        msg['Subject'] = 'rsync-backup: %s [%s: %s]' % (
             status, self.config.get('general', 'label'), self.timestamp)
         msg['From'] = self.global_config.get('reporting', 'from_addr')
         msg['To'] = ','.join(addr for addr in self.to_addrs)
