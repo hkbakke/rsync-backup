@@ -14,9 +14,9 @@ from functools import partial
 from operator import attrgetter
 
 try:
-    from os import scandir as scandir
+    from os import scandir
 except ImportError:
-    from scandir import scandir as scandir
+    from scandir import scandir
 
 
 class BackupException(Exception):
