@@ -38,11 +38,6 @@ and every backup can also be verified at will.
 * If python > 3.5: scandir module from PyPI
 
 ## Usage
-### Configure SSH-keys
-Generate a SSH key pair for backups and place the public key in
-`~/.ssh/authorized_keys` for the backup user on the source host.
-Configure the path to the private key in the backup configuration file.
-
 ### Create the global configuration file
 Place a file called `rsync-backup.conf` in the directory root. An example
 config is included for reference.

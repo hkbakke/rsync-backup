@@ -29,11 +29,24 @@ additional_options = --numeric-ids --partial-dir=.rsync-partial --timeout=600 --
 source_host = ${general:label}
 
 # These parameters are only used if rsync_mode is ssh.
-# ssh_user specifies the user you want to run the backup as on the
-# remote side. ssh_key specifies the local path to the key used for
-# authentication against the remote side.
+#
+# ssh_user:
+#   specifies the user you want to run the backup as on the remote side
+#
+# ssh_key:
+#   path to ssh key
+#
+# ssh_port:
+#   port number to connect to
+#
+# ssh_options:
+#   options for ssh to use when connecting. Can be used in addition to, or in place of,
+#   'ssh_key' and 'ssh_port'
+#
 ssh_user = root
-ssh_key = /root/.ssh/backup
+#ssh_key =
+#ssh_port =
+#ssh_options =
 
 
 [reporting]

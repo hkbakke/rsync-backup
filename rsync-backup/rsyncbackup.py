@@ -501,8 +501,25 @@ class RsyncBackup(object):
                 self.config.get('rsync', 'ssh_user'),
                 self.config.get('rsync', 'source_host'),
                 self.config.get('rsync', 'source_dir'))
-            command.extend(
-                ['-e', 'ssh -i %s' % self.config.get('rsync', 'ssh_key')])
+
+            ssh_args = []
+            ssh_key = self.config.get('rsync', 'ssh_key', fallback=None)
+            if ssh_key:
+                ssh_args.extend(['-i', ssh_key])
+
+            ssh_port = self.config.getint('rsync', 'ssh_port', fallback=None)
+            if ssh_port:
+                ssh_args.extend(['-p', str(ssh_port)])
+
+            ssh_options = self.config.get('rsync', 'ssh_options', fallback=None)
+            if ssh_options:
+                ssh_args.extend(ssh_options.split())
+
+            if ssh_args:
+                command.extend([
+                    '-e',
+                    'ssh %s' % ' '.join(ssh_args)
+                ])
         elif self.config.get('rsync', 'mode') == 'local':
             source = self.config.get('rsync', 'source_dir')
         else:
